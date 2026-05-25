@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(Get-ChildItem -Recurse -File \"c:\\\\Users\\\\xiaog\\\\OneDrive\\\\Máy tính\\\\Discord\\\\Vạn Pháp Tiên Nghịch\" | Where-Object { $_.Extension -in '.go','.env','.mod','.yaml','.yml','.sh','.md','.gitignore','' } | Sort-Object FullName | ForEach-Object { $_.FullName.Replace\\(\"c:\\\\Users\\\\xiaog\\\\OneDrive\\\\Máy tính\\\\Discord\\\\Vạn Pháp Tiên Nghịch\\\\\", \"\"\\) })"
+    ]
+  }
+}
