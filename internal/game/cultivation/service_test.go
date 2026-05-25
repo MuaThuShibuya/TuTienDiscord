@@ -68,6 +68,7 @@ func (r *memCultivationRepo) UpdateStats(_ context.Context, profile *cultivation
 	existing.CombatPower = profile.CombatPower
 	existing.Stamina = profile.Stamina
 	existing.MindState = profile.MindState
+	existing.Path = profile.Path
 	existing.UpdatedAt = profile.UpdatedAt
 
 	return nil
@@ -165,5 +166,31 @@ func TestDefaultValues(t *testing.T) {
 	// CanBreakthrough phải là false khi chưa có exp
 	if p.CanBreakthrough() {
 		t.Error("Người chơi mới không nên có thể đột phá ngay")
+	}
+}
+
+func TestChoosePath(t *testing.T) {
+	svc := cultivation.NewService(newMemCultivationRepo(), nil, nil)
+	ctx := context.Background()
+
+	// 1. Setup profile
+	_, _ = svc.GetOrCreate(ctx, "user_path", "guild1")
+
+	// 2. Chọn sai path -> ErrInvalidInput
+	err := svc.ChoosePath(ctx, "user_path", "guild1", cultivation.CultivationPath("InvalidPath"))
+	if !apperrors.IsInvalidInput(err) {
+		t.Errorf("Phải trả về ErrInvalidInput, có: %v", err)
+	}
+
+	// 3. Chọn đúng path -> Thành công
+	err = svc.ChoosePath(ctx, "user_path", "guild1", cultivation.PathSword)
+	if err != nil {
+		t.Fatalf("ChoosePath thất bại: %v", err)
+	}
+
+	// 4. Chọn lại lần 2 -> ErrPathAlreadyChosen
+	err = svc.ChoosePath(ctx, "user_path", "guild1", cultivation.PathBody)
+	if err == nil || err.Error() != apperrors.ErrPathAlreadyChosen.Error() {
+		t.Errorf("Phải trả về ErrPathAlreadyChosen, có: %v", err)
 	}
 }

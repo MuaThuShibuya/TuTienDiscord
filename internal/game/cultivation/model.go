@@ -63,6 +63,27 @@ func (r Realm) DisplayName() string {
 	return string(r)
 }
 
+// DisplayName trả về tên tiếng Việt của đạo lộ.
+func (p CultivationPath) DisplayName() string {
+	switch p {
+	case PathSword:
+		return "Kiếm Tu"
+	case PathBody:
+		return "Thể Tu"
+	case PathSpirit:
+		return "Linh Tu"
+	case PathPoison:
+		return "Độc Tu"
+	default:
+		return "Chưa Chọn Đạo Lộ"
+	}
+}
+
+// IsValid kiểm tra xem đạo lộ có hợp lệ không.
+func (p CultivationPath) IsValid() bool {
+	return p == PathSword || p == PathBody || p == PathSpirit || p == PathPoison
+}
+
 // MindStateDisplayName trả về tên tiếng Việt của tâm cảnh.
 func (c *CultivationProfile) MindStateDisplayName() string {
 	switch {

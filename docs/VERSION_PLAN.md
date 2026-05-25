@@ -16,19 +16,19 @@
 - Structured logging (zap)
 - Error handling chuẩn
 
-## v0.2 — Cultivation Core ✅ (hiện tại)
+## v0.2 — Cultivation Core ✅ (đã xong)
 - Tĩnh tu (cooldown, exp gain, stamina cost)
 - Bế quan (nhân hệ số tu vi, lock stamina)
 - Tu vi và tiến độ cảnh giới
-- Đột phá cảnh giới (chance-based, dùng đan)
-- Đan dược cơ bản (tăng exp, hồi stamina)
+- Đột phá cảnh giới (chance-based, trừ linh thạch)
 - Tâm cảnh ảnh hưởng hiệu suất tu luyện
-- Chọn đạo lộ (kiếm tu, thể tu, linh tu, độc tu)
+- Chọn đạo lộ (kiếm tu, thể tu, linh tu, độc tu - select 1 lần)
 - Cooldown chi tiết cho từng hành động
 
-## v0.3 — Inventory & Equipment
+## v0.3 — Inventory & Equipment (hiện tại)
 - Túi đồ (giới hạn ô)
 - Item model (instance-based)
+- Đan dược cơ bản (tăng exp, hồi stamina, buff tỉ lệ đột phá)
 - Trang bị (vũ khí, áo giáp, linh khí, pháp bảo)
 - Mặc/tháo trang bị
 - Cường hóa cơ bản (tiêu thụ nguyên liệu)

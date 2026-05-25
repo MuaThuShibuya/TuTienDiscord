@@ -150,7 +150,7 @@ func (r *Router) handleMenuSelect(s *discordgo.Session, i *discordgo.Interaction
 }
 
 // handleProfileAction phân luồng các action button thuộc trang Hồ Sơ.
-func (r *Router) handleProfileAction(s *discordgo.Session, i *discordgo.Interaction, session *Session, action string) {
+func (r *Router) handleProfileAction(s *discordgo.Session, i *discordgo.Interaction, _ *Session, action string) {
 	switch action {
 	case ActionRename:
 		// TODO v0.1: mở modal đổi đạo hiệu
@@ -193,6 +193,17 @@ func (r *Router) handleCultivationAction(s *discordgo.Session, i *discordgo.Inte
 		if res != nil {
 			msg = res.Message
 		}
+	case ActionChoosePath:
+		data := i.MessageComponentData()
+		if len(data.Values) > 0 {
+			selectedPath := cultivation.CultivationPath(data.Values[0])
+			err = r.cultivationSvc.ChoosePath(ctx, session.UserID, session.GuildID, selectedPath)
+			if err == nil {
+				msg = fmt.Sprintf("Cảm ngộ thiên địa thành công! Đạo hữu đã chính thức bước lên con đường **%s**.", selectedPath.DisplayName())
+			}
+		} else {
+			return
+		}
 	default:
 		ui.RespondEphemeralError(s, i, ui.MsgComingSoon)
 		return
@@ -214,6 +225,8 @@ func (r *Router) handleCultivationAction(s *discordgo.Session, i *discordgo.Inte
 			ui.RespondEphemeralWarning(s, i, "Tâm cảnh quá thấp, đột phá lúc này chắc chắn tẩu hỏa nhập ma!")
 		case errors.Is(err, apperrors.ErrMaxRealmReached):
 			ui.RespondEphemeralWarning(s, i, "Đạo hữu đã đứng trên đỉnh phong vạn giới, không thể tiến thêm.")
+		case errors.Is(err, apperrors.ErrPathAlreadyChosen):
+			ui.RespondEphemeralWarning(s, i, "Đạo hữu đã có đạo lộ của riêng mình, không thể cải tu!")
 		default:
 			r.log.Error("Cultivation action error", zap.Error(err))
 			ui.RespondEphemeralError(s, i, ui.MsgGenericError)

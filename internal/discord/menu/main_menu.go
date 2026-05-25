@@ -48,6 +48,11 @@ func buildMainEmbed(vm *MainMenuVM) *discordgo.MessageEmbed {
 			Inline: true,
 		},
 		{
+			Name:   ui.EmojiSkill.String() + " Đạo Lộ",
+			Value:  vm.PathDisplay,
+			Inline: true,
+		},
+		{
 			Name:   ui.EmojiStamina.String() + " Thể Lực",
 			Value:  vm.StaminaBar,
 			Inline: false,

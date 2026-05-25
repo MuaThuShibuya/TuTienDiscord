@@ -43,6 +43,7 @@ const (
 	ActionClosedDoor   = "closeddoor"   // Bế quan
 	ActionBodyTraining = "bodytraining" // Luyện thể
 	ActionBreakthrough = "breakthrough" // Đột phá
+	ActionChoosePath   = "choosepath"   // Chọn đạo lộ (Select Menu)
 )
 
 // ParsedID kết quả phân tích custom_id.

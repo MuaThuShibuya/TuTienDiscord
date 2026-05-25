@@ -16,6 +16,7 @@ type MainMenuVM struct {
 	RealmDisplay string // Ví dụ: "Luyện Khí tầng 1"
 	CombatPower  string // Ví dụ: "1.234" (đã format)
 	MindState    string // Ví dụ: "Bình Tĩnh"
+	PathDisplay  string // Ví dụ: "Kiếm Tu"
 	StaminaBar   string // Ví dụ: "████░░░░░░ 80/100"
 	ExpBar       string // Ví dụ: "███░░░░░░░ 500/1.000"
 
@@ -47,6 +48,7 @@ type CultivationMenuVM struct {
 	RealmDisplay    string // "Luyện Khí tầng 1"
 	MindState       string // "Bình Tĩnh (50/100)"
 	PathDisplay     string // "Kiếm Tu" hoặc "Chưa chọn đạo lộ"
+	HasPath         bool   // Đã chọn đạo lộ chưa (để render Select Menu)
 	StaminaBar      string // "████░░ 80/100"
 	ExpBar          string // "███░░░ 500/1.000 tu vi"
 	CombatPower     string // "1.234"

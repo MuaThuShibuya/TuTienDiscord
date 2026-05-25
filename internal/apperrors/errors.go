@@ -31,6 +31,7 @@ var (
 	ErrMaxRealmReached            = errors.New("max realm reached")
 	ErrBreakthroughFailed         = errors.New("breakthrough failed")
 	ErrInvalidAction              = errors.New("invalid action")
+	ErrPathAlreadyChosen          = errors.New("path already chosen") // Đã chọn đạo lộ
 )
 
 // --- AppError: lỗi có cấu trúc mang thông điệp tiếng Việt cho user ---
@@ -66,8 +67,10 @@ func IsInvalidDaoName(err error) bool      { return errors.Is(err, ErrInvalidDao
 func IsSessionExpired(err error) bool      { return errors.Is(err, ErrSessionExpired) }
 func IsSessionNotOwner(err error) bool     { return errors.Is(err, ErrSessionNotOwner) }
 func IsCooldownActive(err error) bool      { return errors.Is(err, ErrCooldownActive) }
+func IsInvalidInput(err error) bool        { return errors.Is(err, ErrInvalidInput) }
 func IsInsufficientFunds(err error) bool   { return errors.Is(err, ErrInsufficientFunds) }
 func IsInsufficientStamina(err error) bool { return errors.Is(err, ErrInsufficientStamina) }
+func IsPathAlreadyChosen(err error) bool   { return errors.Is(err, ErrPathAlreadyChosen) }
 
 // UserFacing trích xuất thông điệp tiếng Việt từ AppError.
 // Nếu không phải AppError, trả về fallback.

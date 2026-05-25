@@ -32,6 +32,9 @@ type Service interface {
 	Seclusion(ctx context.Context, input CultivationActionInput) (*CultivationActionResult, error)
 	BodyTraining(ctx context.Context, input CultivationActionInput) (*CultivationActionResult, error)
 	Breakthrough(ctx context.Context, input BreakthroughInput) (*BreakthroughResult, error)
+
+	// ChoosePath cho phép người chơi chọn con đường tu tiên (chỉ được chọn 1 lần).
+	ChoosePath(ctx context.Context, userID, guildID string, path CultivationPath) error
 }
 
 type cultivationService struct {
@@ -118,7 +121,8 @@ func (s *cultivationService) Meditate(ctx context.Context, in CultivationActionI
 		return nil, err
 	}
 
-	if prof.Stamina < 5 {
+	cost := ApplyPathStaminaCostBonus(prof.Path, "meditate", 5)
+	if prof.Stamina < cost {
 		return nil, apperrors.ErrInsufficientStamina
 	}
 
@@ -126,8 +130,9 @@ func (s *cultivationService) Meditate(ctx context.Context, in CultivationActionI
 	if prof.MindState >= 70 {
 		expGained = expGained * 110 / 100
 	}
+	expGained = ApplyPathExpBonus(prof.Path, "meditate", expGained)
 
-	prof.Stamina -= 5
+	prof.Stamina -= cost
 	prof.CultivationExp += expGained
 	prof.MindState = clamp(prof.MindState+1, 0, 100)
 
@@ -137,7 +142,7 @@ func (s *cultivationService) Meditate(ctx context.Context, in CultivationActionI
 	_ = s.cooldownSvc.SetCooldown(ctx, in.UserID, in.GuildID, cooldown.ActionMeditate, 5*time.Minute)
 
 	return &CultivationActionResult{
-		Action: "Tĩnh Tu", ExpGained: expGained, StaminaSpent: 5,
+		Action: "Tĩnh Tu", ExpGained: expGained, StaminaSpent: cost,
 		NewCultivationExp: prof.CultivationExp, CultivationRequired: prof.CultivationExpRequired,
 		NewStamina: prof.Stamina, NewMindState: prof.MindState,
 		CooldownExpiresAt: in.Now.Add(5 * time.Minute),
@@ -155,7 +160,8 @@ func (s *cultivationService) Seclusion(ctx context.Context, in CultivationAction
 		return nil, err
 	}
 
-	if prof.Stamina < 20 {
+	cost := ApplyPathStaminaCostBonus(prof.Path, "seclusion", 20)
+	if prof.Stamina < cost {
 		return nil, apperrors.ErrInsufficientStamina
 	}
 
@@ -163,8 +169,9 @@ func (s *cultivationService) Seclusion(ctx context.Context, in CultivationAction
 	if prof.MindState >= 70 {
 		expGained = expGained * 115 / 100
 	}
+	expGained = ApplyPathExpBonus(prof.Path, "seclusion", expGained)
 
-	prof.Stamina -= 20
+	prof.Stamina -= cost
 	prof.CultivationExp += expGained
 	prof.MindState = clamp(prof.MindState+2, 0, 100)
 
@@ -174,7 +181,7 @@ func (s *cultivationService) Seclusion(ctx context.Context, in CultivationAction
 	_ = s.cooldownSvc.SetCooldown(ctx, in.UserID, in.GuildID, cooldown.ActionSeclusion, 60*time.Minute)
 
 	return &CultivationActionResult{
-		Action: "Bế Quan", ExpGained: expGained, StaminaSpent: 20,
+		Action: "Bế Quan", ExpGained: expGained, StaminaSpent: cost,
 		NewCultivationExp: prof.CultivationExp, CultivationRequired: prof.CultivationExpRequired,
 		NewStamina: prof.Stamina, NewMindState: prof.MindState,
 		CooldownExpiresAt: in.Now.Add(60 * time.Minute),
@@ -192,14 +199,16 @@ func (s *cultivationService) BodyTraining(ctx context.Context, in CultivationAct
 		return nil, err
 	}
 
-	if prof.Stamina < 10 {
+	cost := ApplyPathStaminaCostBonus(prof.Path, "body_training", 10)
+	if prof.Stamina < cost {
 		return nil, apperrors.ErrInsufficientStamina
 	}
 
 	expGained := int64(5 + prof.RealmLevel*3)
 	cpGained := int64(3 + prof.RealmLevel*2)
+	cpGained = ApplyPathCombatPowerBonus(prof.Path, "body_training", cpGained)
 
-	prof.Stamina -= 10
+	prof.Stamina -= cost
 	prof.CultivationExp += expGained
 	prof.CombatPower += cpGained
 
@@ -209,7 +218,7 @@ func (s *cultivationService) BodyTraining(ctx context.Context, in CultivationAct
 	_ = s.cooldownSvc.SetCooldown(ctx, in.UserID, in.GuildID, cooldown.ActionBodyTraining, 15*time.Minute)
 
 	return &CultivationActionResult{
-		Action: "Luyện Thể", ExpGained: expGained, CombatPowerGained: cpGained, StaminaSpent: 10,
+		Action: "Luyện Thể", ExpGained: expGained, CombatPowerGained: cpGained, StaminaSpent: cost,
 		NewCultivationExp: prof.CultivationExp, CultivationRequired: prof.CultivationExpRequired,
 		NewCombatPower: prof.CombatPower, NewStamina: prof.Stamina, NewMindState: prof.MindState,
 		CooldownExpiresAt: in.Now.Add(15 * time.Minute),
@@ -238,7 +247,9 @@ func (s *cultivationService) Breakthrough(ctx context.Context, in BreakthroughIn
 	baseRate := 0.60
 	mindBonus := float64(prof.MindState-50) * 0.005
 	realmPenalty := float64(prof.RealmLevel) * 0.01
-	finalRate := clampF(baseRate+mindBonus-realmPenalty, 0.20, 0.95)
+	finalRate := baseRate + mindBonus - realmPenalty
+	finalRate = ApplyPathBreakthroughRateBonus(prof.Path, finalRate)
+	finalRate = clampF(finalRate, 0.20, 0.95) // Clamp lần cuối
 
 	roll := in.Rand.Float64()
 	success := roll <= finalRate
@@ -278,7 +289,8 @@ func (s *cultivationService) Breakthrough(ctx context.Context, in BreakthroughIn
 			return nil, err
 		}
 
-		prof.MindState = clamp(prof.MindState-5, 0, 100)
+		penalty := ApplyPathBreakthroughFailurePenalty(prof.Path, 5)
+		prof.MindState = clamp(prof.MindState-penalty, 0, 100)
 		_ = s.cooldownSvc.SetCooldown(ctx, in.UserID, in.GuildID, cooldown.ActionBreakthrough, 15*time.Minute)
 
 		res.NewRealm = string(prof.Realm)
@@ -296,4 +308,21 @@ func (s *cultivationService) Breakthrough(ctx context.Context, in BreakthroughIn
 	res.NewMindState = prof.MindState
 
 	return res, nil
+}
+
+func (s *cultivationService) ChoosePath(ctx context.Context, userID, guildID string, path CultivationPath) error {
+	if !path.IsValid() {
+		return apperrors.ErrInvalidInput
+	}
+
+	prof, err := s.GetProfile(ctx, userID, guildID)
+	if err != nil {
+		return err
+	}
+	if prof.Path != PathNone {
+		return apperrors.ErrPathAlreadyChosen
+	}
+
+	prof.Path = path
+	return s.repo.UpdateStats(ctx, prof)
 }

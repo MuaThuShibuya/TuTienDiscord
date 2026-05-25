@@ -72,6 +72,7 @@ func (r *mongoCultivationRepo) UpdateStats(ctx context.Context, p *CultivationPr
 		"combatPower":            p.CombatPower,
 		"stamina":                p.Stamina,
 		"mindState":              p.MindState,
+		"path":                   p.Path,
 		"updatedAt":              p.UpdatedAt,
 	}}
 

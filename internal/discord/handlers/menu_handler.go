@@ -208,6 +208,7 @@ func toMainMenuVM(session *menu.Session, player *profile.Player, cult *cultivati
 		RealmDisplay: fmt.Sprintf("%s tầng %d", cult.Realm.DisplayName(), cult.RealmLevel),
 		CombatPower:  utils.FormatNumber(cult.CombatPower),
 		MindState:    fmt.Sprintf("%s (%d/100)", cult.MindStateDisplayName(), cult.MindState),
+		PathDisplay:  cult.Path.DisplayName(),
 		StaminaBar:   staminaBar,
 		ExpBar:       expBar,
 		SpiritStones: utils.FormatNumber(wallet.SpiritStones),
@@ -231,11 +232,6 @@ func toProfileMenuVM(session *menu.Session, player *profile.Player, wallet *econ
 }
 
 func toCultivationMenuVM(session *menu.Session, player *profile.Player, cult *cultivation.CultivationProfile) *menu.CultivationMenuVM {
-	pathDisplay := "Chưa chọn đạo lộ"
-	if cult.Path != cultivation.PathNone {
-		pathDisplay = string(cult.Path)
-	}
-
 	staminaBar := fmt.Sprintf("`%s` %d/%d",
 		utils.ProgressBar(cult.Stamina, cult.MaxStamina, 10),
 		cult.Stamina, cult.MaxStamina)
@@ -250,7 +246,8 @@ func toCultivationMenuVM(session *menu.Session, player *profile.Player, cult *cu
 		DaoName:         player.DaoName,
 		RealmDisplay:    fmt.Sprintf("%s tầng %d", cult.Realm.DisplayName(), cult.RealmLevel),
 		MindState:       fmt.Sprintf("%s (%d/100)", cult.MindStateDisplayName(), cult.MindState),
-		PathDisplay:     pathDisplay,
+		PathDisplay:     cult.Path.DisplayName(),
+		HasPath:         cult.Path != cultivation.PathNone,
 		StaminaBar:      staminaBar,
 		ExpBar:          expBar,
 		CombatPower:     utils.FormatNumber(cult.CombatPower),
