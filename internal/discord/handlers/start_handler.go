@@ -19,6 +19,7 @@ import (
 	"github.com/whiskey/tu-tien-bot/internal/discord/ui"
 	"github.com/whiskey/tu-tien-bot/internal/game/cultivation"
 	"github.com/whiskey/tu-tien-bot/internal/game/economy"
+	"github.com/whiskey/tu-tien-bot/internal/game/inventory"
 	"github.com/whiskey/tu-tien-bot/internal/game/profile"
 	"github.com/whiskey/tu-tien-bot/internal/logger"
 )
@@ -28,6 +29,7 @@ type StartHandler struct {
 	profileSvc     profile.Service
 	cultivationSvc cultivation.Service
 	economySvc     economy.Service
+	inventorySvc   inventory.Service
 	log            *zap.Logger
 }
 
@@ -36,11 +38,13 @@ func NewStartHandler(
 	profileSvc profile.Service,
 	cultivationSvc cultivation.Service,
 	economySvc economy.Service,
+	inventorySvc inventory.Service,
 ) *StartHandler {
 	return &StartHandler{
 		profileSvc:     profileSvc,
 		cultivationSvc: cultivationSvc,
 		economySvc:     economySvc,
+		inventorySvc:   inventorySvc,
 		log:            logger.L().Named("handler.start"),
 	}
 }
@@ -88,6 +92,9 @@ func (h *StartHandler) Handle(s *discordgo.Session, i *discordgo.InteractionCrea
 		ui.EditEphemeralError(s, i.Interaction, ui.MsgGenericError)
 		return
 	}
+
+	// Cấp quà tân thủ (Túi đồ, Đan dược, Kiếm gỗ)
+	_ = h.inventorySvc.GrantStarterItems(ctx, userID, guildID)
 
 	// Kiểm tra người chơi đã đăng ký trước đó chưa (CreatedAt cách đây trên 5 giây)
 	isNewPlayer := player.CreatedAt.After(time.Now().Add(-5 * time.Second))

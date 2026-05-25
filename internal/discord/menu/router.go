@@ -23,6 +23,8 @@ import (
 	"github.com/whiskey/tu-tien-bot/internal/config"
 	"github.com/whiskey/tu-tien-bot/internal/discord/ui"
 	"github.com/whiskey/tu-tien-bot/internal/game/cultivation"
+	"github.com/whiskey/tu-tien-bot/internal/game/equipment"
+	"github.com/whiskey/tu-tien-bot/internal/game/inventory"
 	"github.com/whiskey/tu-tien-bot/internal/logger"
 )
 
@@ -34,17 +36,21 @@ type Router struct {
 	cfg            *config.Config
 	sessionSvc     SessionService
 	cultivationSvc cultivation.Service
+	inventorySvc   inventory.Service
+	equipSvc       equipment.Service
 	pageLoaders    map[Page]PageLoader
 	log            *zap.Logger
 }
 
 // NewRouter tạo menu interaction router.
 // pageLoaders ánh xạ mỗi Page sang hàm tải dữ liệu và render trang đó.
-func NewRouter(cfg *config.Config, sessionSvc SessionService, cultSvc cultivation.Service, loaders map[Page]PageLoader) *Router {
+func NewRouter(cfg *config.Config, sessionSvc SessionService, cultSvc cultivation.Service, invSvc inventory.Service, equipSvc equipment.Service, loaders map[Page]PageLoader) *Router {
 	return &Router{
 		cfg:            cfg,
 		sessionSvc:     sessionSvc,
 		cultivationSvc: cultSvc,
+		inventorySvc:   invSvc,
+		equipSvc:       equipSvc,
 		pageLoaders:    loaders,
 		log:            logger.L().Named("menu.router"),
 	}
@@ -94,11 +100,43 @@ func (r *Router) Handle(s *discordgo.Session, i *discordgo.Interaction) {
 		r.handleProfileAction(s, i, session, parsed.Action)
 	case DomainCultivation:
 		r.handleCultivationAction(s, i, session, parsed.Action)
+	case DomainInventory:
+		r.handleInventoryAction(s, i, session, parsed.Action)
 	default:
 		r.log.Warn("menu.Router: domain không xác định",
 			zap.String("domain", parsed.Domain),
 			zap.String("customID", customID))
 		ui.RespondEphemeralError(s, i, ui.MsgComingSoon)
+	}
+}
+
+func (r *Router) handleInventoryAction(s *discordgo.Session, i *discordgo.Interaction, session *Session, action string) {
+	ctx := context.Background()
+	var err error
+	var msg string
+
+	switch action {
+	case ActionInventoryUse:
+		data := i.MessageComponentData()
+		if len(data.Values) > 0 {
+			msg, err = r.inventorySvc.UseItem(ctx, session.UserID, session.GuildID, data.Values[0])
+		}
+	default:
+		ui.RespondEphemeralError(s, i, ui.MsgComingSoon)
+		return
+	}
+
+	if err != nil {
+		ui.RespondEphemeralWarning(s, i, apperrors.UserFacing(err, "Không thể sử dụng vật phẩm này!"))
+		return
+	}
+
+	if msg != "" {
+		r.renderPage(s, i, session, PageInventory)
+		_, _ = s.FollowupMessageCreate(i, true, &discordgo.WebhookParams{
+			Embeds: []*discordgo.MessageEmbed{ui.SuccessEmbed("Túi Đồ", msg)},
+			Flags:  discordgo.MessageFlagsEphemeral,
+		})
 	}
 }
 

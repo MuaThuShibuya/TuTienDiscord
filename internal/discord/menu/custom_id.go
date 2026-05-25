@@ -21,6 +21,8 @@ const (
 	DomainMenuSelect  = "menu"        // Select menu chọn category
 	DomainProfile     = "profile"     // Hồ sơ người chơi
 	DomainCultivation = "cultivation" // Tu luyện
+	DomainInventory   = "inventory"   // Túi đồ
+	DomainEquipment   = "equipment"   // Trang bị
 	// TODO v0.3+: thêm domain khi xây dựng tính năng mới
 )
 
@@ -44,6 +46,14 @@ const (
 	ActionBodyTraining = "bodytraining" // Luyện thể
 	ActionBreakthrough = "breakthrough" // Đột phá
 	ActionChoosePath   = "choosepath"   // Chọn đạo lộ (Select Menu)
+
+	// Inventory
+	ActionInventoryUse       = "use"       // Dùng vật phẩm
+	ActionInventoryDismantle = "dismantle" // Phân giải
+
+	// Equipment
+	ActionEquipmentEquip   = "equip"   // Mặc trang bị
+	ActionEquipmentUnequip = "unequip" // Tháo trang bị
 )
 
 // ParsedID kết quả phân tích custom_id.

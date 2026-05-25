@@ -24,6 +24,9 @@ import (
 	"github.com/whiskey/tu-tien-bot/internal/discord/ui"
 	"github.com/whiskey/tu-tien-bot/internal/game/cultivation"
 	"github.com/whiskey/tu-tien-bot/internal/game/economy"
+	"github.com/whiskey/tu-tien-bot/internal/game/equipment"
+	"github.com/whiskey/tu-tien-bot/internal/game/inventory"
+	"github.com/whiskey/tu-tien-bot/internal/game/item"
 	"github.com/whiskey/tu-tien-bot/internal/game/profile"
 	"github.com/whiskey/tu-tien-bot/internal/logger"
 	"github.com/whiskey/tu-tien-bot/pkg/utils"
@@ -35,6 +38,8 @@ type MenuHandler struct {
 	profileSvc     profile.Service
 	cultivationSvc cultivation.Service
 	economySvc     economy.Service
+	inventorySvc   inventory.Service
+	equipSvc       equipment.Service
 	sessionSvc     menu.SessionService
 	log            *zap.Logger
 }
@@ -45,6 +50,8 @@ func NewMenuHandler(
 	profileSvc profile.Service,
 	cultivationSvc cultivation.Service,
 	economySvc economy.Service,
+	inventorySvc inventory.Service,
+	equipSvc equipment.Service,
 	sessionSvc menu.SessionService,
 ) *MenuHandler {
 	return &MenuHandler{
@@ -52,6 +59,8 @@ func NewMenuHandler(
 		profileSvc:     profileSvc,
 		cultivationSvc: cultivationSvc,
 		economySvc:     economySvc,
+		inventorySvc:   inventorySvc,
+		equipSvc:       equipSvc,
 		sessionSvc:     sessionSvc,
 		log:            logger.L().Named("handler.menu"),
 	}
@@ -138,8 +147,24 @@ func (h *MenuHandler) PageLoaders() map[menu.Page]menu.PageLoader {
 		menu.PageMain:        h.loadMainPage,
 		menu.PageProfile:     h.loadProfilePage,
 		menu.PageCultivation: h.loadCultivationPage,
+		menu.PageInventory:   h.loadInventoryPage,
 		// TODO v0.3+: thêm PageInventory, PageSkills, PagePets, PageGacha, PageMarket, PageSect
 	}
+}
+
+func (h *MenuHandler) loadInventoryPage(ctx context.Context, session *menu.Session) (*discordgo.InteractionResponseData, error) {
+	player, err := h.profileSvc.GetPlayer(ctx, session.UserID, session.GuildID)
+	if err != nil {
+		return nil, err
+	}
+
+	_, items, err := h.inventorySvc.GetInventory(ctx, session.UserID, session.GuildID)
+	if err != nil {
+		return nil, err
+	}
+
+	vm := toInventoryMenuVM(session, player, items)
+	return menu.BuildInventoryMenuResponse(vm), nil
 }
 
 // loadMainPage tải dữ liệu và render trang Main Menu.
@@ -252,5 +277,51 @@ func toCultivationMenuVM(session *menu.Session, player *profile.Player, cult *cu
 		ExpBar:          expBar,
 		CombatPower:     utils.FormatNumber(cult.CombatPower),
 		CanBreakthrough: cult.CanBreakthrough(),
+	}
+}
+
+func toInventoryMenuVM(session *menu.Session, player *profile.Player, items []*item.ItemInstance) *menu.InventoryMenuVM {
+	// Logic Phân trang (Pagination) bảo vệ giới hạn 25 của Discord
+	const itemsPerPage = 20
+	page := 1 // Mặc định trang 1 (Có thể mở rộng lấy từ session.Data hoặc URL router sau này)
+
+	totalItems := len(items)
+	totalPages := (totalItems + itemsPerPage - 1) / itemsPerPage
+	if totalPages == 0 {
+		totalPages = 1
+	}
+
+	start := (page - 1) * itemsPerPage
+	end := start + itemsPerPage
+	if start >= totalItems {
+		start = 0
+	}
+	if end > totalItems {
+		end = totalItems
+	}
+
+	var itemVMs []menu.InventoryItemVM
+	for _, it := range items[start:end] {
+		name := it.DefinitionID
+		// Cố gắng lấy tên thật của vật phẩm từ từ điển (nếu có)
+		if def, ok := item.GetDefinition(it.DefinitionID); ok {
+			name = def.Name
+		}
+
+		itemVMs = append(itemVMs, menu.InventoryItemVM{
+			InstanceID: it.InstanceID,
+			Name:       name,
+			Quantity:   it.Quantity,
+		})
+	}
+
+	return &menu.InventoryMenuVM{
+		SessionID: session.SessionID,
+		DaoName:   player.DaoName,
+		// Đã xóa SlotLimit vì view model hiện tại không định nghĩa trường này
+		Items: itemVMs,
+		// Cần thêm 2 trường này vào menu.InventoryMenuVM của bạn bên gói menu
+		// CurrentPage: page,
+		// TotalPages:  totalPages,
 	}
 }

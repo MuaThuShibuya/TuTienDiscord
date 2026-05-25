@@ -55,6 +55,16 @@ func EnsureIndexes(ctx context.Context, db *mongo.Database) error {
 		log.Error("Không tạo được index cho collection menu_sessions", zap.Error(err))
 	}
 
+	if err := ensureInventoryIndexes(indexCtx, db); err != nil {
+		errs = append(errs, err)
+		log.Error("Không tạo được index cho collection inventories", zap.Error(err))
+	}
+
+	if err := ensureItemIndexes(indexCtx, db); err != nil {
+		errs = append(errs, err)
+		log.Error("Không tạo được index cho collection items", zap.Error(err))
+	}
+
 	if len(errs) > 0 {
 		// Trả về lỗi đầu tiên — caller (main.go) sẽ Fatal và không khởi động
 		return errs[0]
@@ -77,6 +87,37 @@ func ensurePlayerIndexes(ctx context.Context, db *mongo.Database) error {
 		{
 			Keys:    bson.D{{Key: "lastActiveAt", Value: -1}},
 			Options: options.Index().SetName("idx_player_last_active"),
+		},
+	})
+	return err
+}
+
+// ensureInventoryIndexes tạo index cho collection inventories.
+// - Unique compound (userId + guildId): mỗi người chơi chỉ có 1 túi đồ mỗi server.
+func ensureInventoryIndexes(ctx context.Context, db *mongo.Database) error {
+	col := db.Collection("inventories")
+	_, err := col.Indexes().CreateMany(ctx, []mongo.IndexModel{
+		{
+			Keys:    bson.D{{Key: "userId", Value: 1}, {Key: "guildId", Value: 1}},
+			Options: options.Index().SetUnique(true).SetName("idx_inventory_user_guild"),
+		},
+	})
+	return err
+}
+
+// ensureItemIndexes tạo index cho collection items (chứa item instances).
+// - Compound (userId + guildId): Truy xuất nhanh toàn bộ vật phẩm trong túi của 1 người.
+// - Unique (instanceId): Định danh duy nhất cho từng món đồ/stack đồ.
+func ensureItemIndexes(ctx context.Context, db *mongo.Database) error {
+	col := db.Collection("items") // Giả định tên collection là "items"
+	_, err := col.Indexes().CreateMany(ctx, []mongo.IndexModel{
+		{
+			Keys:    bson.D{{Key: "userId", Value: 1}, {Key: "guildId", Value: 1}},
+			Options: options.Index().SetName("idx_item_user_guild"),
+		},
+		{
+			Keys:    bson.D{{Key: "instanceId", Value: 1}},
+			Options: options.Index().SetUnique(true).SetName("idx_item_instance_id"),
 		},
 	})
 	return err

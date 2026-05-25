@@ -32,6 +32,11 @@ var (
 	ErrBreakthroughFailed         = errors.New("breakthrough failed")
 	ErrInvalidAction              = errors.New("invalid action")
 	ErrPathAlreadyChosen          = errors.New("path already chosen") // Đã chọn đạo lộ
+
+	ErrInventoryFull            = errors.New("inventory full")
+	ErrItemNotFound             = errors.New("item not found")
+	ErrItemNotUsable            = errors.New("item not usable")
+	ErrInsufficientItemQuantity = errors.New("insufficient item quantity")
 )
 
 // --- AppError: lỗi có cấu trúc mang thông điệp tiếng Việt cho user ---
@@ -61,16 +66,20 @@ func New(code, userMessage string, cause error) *AppError {
 
 // --- Kiểm tra loại lỗi ---
 
-func IsNotFound(err error) bool            { return errors.Is(err, ErrNotFound) }
-func IsAlreadyExists(err error) bool       { return errors.Is(err, ErrAlreadyExists) }
-func IsInvalidDaoName(err error) bool      { return errors.Is(err, ErrInvalidDaoName) }
-func IsSessionExpired(err error) bool      { return errors.Is(err, ErrSessionExpired) }
-func IsSessionNotOwner(err error) bool     { return errors.Is(err, ErrSessionNotOwner) }
-func IsCooldownActive(err error) bool      { return errors.Is(err, ErrCooldownActive) }
-func IsInvalidInput(err error) bool        { return errors.Is(err, ErrInvalidInput) }
-func IsInsufficientFunds(err error) bool   { return errors.Is(err, ErrInsufficientFunds) }
-func IsInsufficientStamina(err error) bool { return errors.Is(err, ErrInsufficientStamina) }
-func IsPathAlreadyChosen(err error) bool   { return errors.Is(err, ErrPathAlreadyChosen) }
+func IsNotFound(err error) bool                 { return errors.Is(err, ErrNotFound) }
+func IsAlreadyExists(err error) bool            { return errors.Is(err, ErrAlreadyExists) }
+func IsInvalidDaoName(err error) bool           { return errors.Is(err, ErrInvalidDaoName) }
+func IsSessionExpired(err error) bool           { return errors.Is(err, ErrSessionExpired) }
+func IsSessionNotOwner(err error) bool          { return errors.Is(err, ErrSessionNotOwner) }
+func IsCooldownActive(err error) bool           { return errors.Is(err, ErrCooldownActive) }
+func IsInvalidInput(err error) bool             { return errors.Is(err, ErrInvalidInput) }
+func IsInsufficientFunds(err error) bool        { return errors.Is(err, ErrInsufficientFunds) }
+func IsInsufficientStamina(err error) bool      { return errors.Is(err, ErrInsufficientStamina) }
+func IsPathAlreadyChosen(err error) bool        { return errors.Is(err, ErrPathAlreadyChosen) }
+func IsInventoryFull(err error) bool            { return errors.Is(err, ErrInventoryFull) }
+func IsItemNotFound(err error) bool             { return errors.Is(err, ErrItemNotFound) }
+func IsItemNotUsable(err error) bool            { return errors.Is(err, ErrItemNotUsable) }
+func IsInsufficientItemQuantity(err error) bool { return errors.Is(err, ErrInsufficientItemQuantity) }
 
 // UserFacing trích xuất thông điệp tiếng Việt từ AppError.
 // Nếu không phải AppError, trả về fallback.

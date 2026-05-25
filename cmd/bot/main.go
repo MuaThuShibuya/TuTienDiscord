@@ -30,6 +30,9 @@ import (
 	cooldownpkg "github.com/whiskey/tu-tien-bot/internal/game/cooldown"
 	cultivationpkg "github.com/whiskey/tu-tien-bot/internal/game/cultivation"
 	economypkg "github.com/whiskey/tu-tien-bot/internal/game/economy"
+	equipmentpkg "github.com/whiskey/tu-tien-bot/internal/game/equipment"
+	inventorypkg "github.com/whiskey/tu-tien-bot/internal/game/inventory"
+	itempkg "github.com/whiskey/tu-tien-bot/internal/game/item"
 	profilepkg "github.com/whiskey/tu-tien-bot/internal/game/profile"
 )
 
@@ -97,20 +100,25 @@ func main() {
 	economyRepo := economypkg.NewMongoRepository(db.DB())
 	cooldownRepo := cooldownpkg.NewMongoRepository(db.DB())
 	sessionRepo := discordmenu.NewSessionRepository(db.DB())
+	itemRepo := itempkg.NewMongoRepository(db.DB())
+	invRepo := inventorypkg.NewMongoRepository(db.DB())
+	equipRepo := equipmentpkg.NewMongoRepository(db.DB())
 
 	// --- 5. Services (business logic) ---
 	profileSvc := profilepkg.NewService(profileRepo)
 	economySvc := economypkg.NewService(economyRepo)
 	cooldownSvc := cooldownpkg.NewService(cooldownRepo)
 	cultivationSvc := cultivationpkg.NewService(cultivationRepo, cooldownSvc, economySvc)
+	inventorySvc := inventorypkg.NewService(invRepo, itemRepo, cultivationSvc)
+	equipSvc := equipmentpkg.NewService(equipRepo, itemRepo)
 	sessionSvc := discordmenu.NewSessionService(sessionRepo)
 
 	// --- 6. Handlers (Controllers) ---
-	startHandler := handlers.NewStartHandler(profileSvc, cultivationSvc, economySvc)
-	menuHandler := handlers.NewMenuHandler(cfg, profileSvc, cultivationSvc, economySvc, sessionSvc)
+	startHandler := handlers.NewStartHandler(profileSvc, cultivationSvc, economySvc, inventorySvc)
+	menuHandler := handlers.NewMenuHandler(cfg, profileSvc, cultivationSvc, economySvc, inventorySvc, equipSvc, sessionSvc)
 
 	// --- 7. Menu router ---
-	menuRouter := discordmenu.NewRouter(cfg, sessionSvc, cultivationSvc, menuHandler.PageLoaders())
+	menuRouter := discordmenu.NewRouter(cfg, sessionSvc, cultivationSvc, inventorySvc, equipSvc, menuHandler.PageLoaders())
 
 	// --- 8. Discord top-level router ---
 	discordRouter := discord.NewRouter(startHandler, menuHandler, menuRouter)

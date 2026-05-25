@@ -54,3 +54,19 @@ type CultivationMenuVM struct {
 	CombatPower     string // "1.234"
 	CanBreakthrough bool   // Có thể đột phá không — dùng để enable/disable nút
 }
+
+type InventoryMenuVM struct {
+	SessionID string
+	DaoName   string
+	SlotUsage string // "5/50"
+	Items     []InventoryItemVM
+}
+
+type InventoryItemVM struct {
+	InstanceID string
+	Name       string
+	Quantity   int64
+	Rarity     string
+	IsUsable   bool
+	IsEquip    bool
+}

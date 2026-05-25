@@ -29,6 +29,7 @@
 - Túi đồ (giới hạn ô)
 - Item model (instance-based)
 - Đan dược cơ bản (tăng exp, hồi stamina, buff tỉ lệ đột phá)
+- Lò luyện đan dược
 - Trang bị (vũ khí, áo giáp, linh khí, pháp bảo)
 - Mặc/tháo trang bị
 - Cường hóa cơ bản (tiêu thụ nguyên liệu)
