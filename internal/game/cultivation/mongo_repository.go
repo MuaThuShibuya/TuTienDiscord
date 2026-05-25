@@ -58,3 +58,29 @@ func (r *mongoCultivationRepo) Upsert(ctx context.Context, profile *CultivationP
 	}
 	return nil
 }
+
+func (r *mongoCultivationRepo) UpdateStats(ctx context.Context, p *CultivationProfile) error {
+	p.UpdatedAt = time.Now().UTC()
+
+	filter := bson.M{"userId": p.UserID, "guildId": p.GuildID}
+	// Dùng $set để update một phần thay vì toàn bộ document, an toàn không đè CreatedAt
+	update := bson.M{"$set": bson.M{
+		"realm":                  p.Realm,
+		"realmLevel":             p.RealmLevel,
+		"cultivationExp":         p.CultivationExp,
+		"cultivationExpRequired": p.CultivationExpRequired,
+		"combatPower":            p.CombatPower,
+		"stamina":                p.Stamina,
+		"mindState":              p.MindState,
+		"updatedAt":              p.UpdatedAt,
+	}}
+
+	res, err := r.col.UpdateOne(ctx, filter, update)
+	if err != nil {
+		return fmt.Errorf("cultivation.UpdateStats: %w", err)
+	}
+	if res.MatchedCount == 0 {
+		return fmt.Errorf("%w: cultivation update failed", apperrors.ErrNotFound)
+	}
+	return nil
+}

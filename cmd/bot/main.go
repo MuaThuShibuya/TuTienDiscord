@@ -84,6 +84,13 @@ func main() {
 	}
 	idxCancel()
 
+	// Chạy Auto Migration (Tự động quét và vá lỗi dữ liệu trên DB)
+	migCtx, migCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	if err := database.AutoMigrate(migCtx, db.DB()); err != nil {
+		log.Fatal("Lỗi auto migration schema", zap.Error(err))
+	}
+	migCancel()
+
 	// --- 4. Repositories (chỉ MongoDB) ---
 	profileRepo := profilepkg.NewMongoRepository(db.DB())
 	cultivationRepo := cultivationpkg.NewMongoRepository(db.DB())
@@ -93,9 +100,9 @@ func main() {
 
 	// --- 5. Services (business logic) ---
 	profileSvc := profilepkg.NewService(profileRepo)
-	cultivationSvc := cultivationpkg.NewService(cultivationRepo)
 	economySvc := economypkg.NewService(economyRepo)
-	_ = cooldownpkg.NewService(cooldownRepo) // đã wire; dùng từ v0.2
+	cooldownSvc := cooldownpkg.NewService(cooldownRepo)
+	cultivationSvc := cultivationpkg.NewService(cultivationRepo, cooldownSvc, economySvc)
 	sessionSvc := discordmenu.NewSessionService(sessionRepo)
 
 	// --- 6. Handlers (Controllers) ---
@@ -103,7 +110,7 @@ func main() {
 	menuHandler := handlers.NewMenuHandler(cfg, profileSvc, cultivationSvc, economySvc, sessionSvc)
 
 	// --- 7. Menu router ---
-	menuRouter := discordmenu.NewRouter(cfg, sessionSvc, menuHandler.PageLoaders())
+	menuRouter := discordmenu.NewRouter(cfg, sessionSvc, cultivationSvc, menuHandler.PageLoaders())
 
 	// --- 8. Discord top-level router ---
 	discordRouter := discord.NewRouter(startHandler, menuHandler, menuRouter)

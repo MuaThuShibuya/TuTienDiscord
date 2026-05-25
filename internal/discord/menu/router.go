@@ -11,6 +11,9 @@ package menu
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"math/rand"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
@@ -19,6 +22,7 @@ import (
 	apperrors "github.com/whiskey/tu-tien-bot/internal/apperrors"
 	"github.com/whiskey/tu-tien-bot/internal/config"
 	"github.com/whiskey/tu-tien-bot/internal/discord/ui"
+	"github.com/whiskey/tu-tien-bot/internal/game/cultivation"
 	"github.com/whiskey/tu-tien-bot/internal/logger"
 )
 
@@ -27,20 +31,22 @@ type PageLoader func(ctx context.Context, session *Session) (*discordgo.Interact
 
 // Router xử lý mọi tương tác component (button / select menu) bên trong hệ thống menu.
 type Router struct {
-	cfg         *config.Config
-	sessionSvc  SessionService
-	pageLoaders map[Page]PageLoader
-	log         *zap.Logger
+	cfg            *config.Config
+	sessionSvc     SessionService
+	cultivationSvc cultivation.Service
+	pageLoaders    map[Page]PageLoader
+	log            *zap.Logger
 }
 
 // NewRouter tạo menu interaction router.
 // pageLoaders ánh xạ mỗi Page sang hàm tải dữ liệu và render trang đó.
-func NewRouter(cfg *config.Config, sessionSvc SessionService, loaders map[Page]PageLoader) *Router {
+func NewRouter(cfg *config.Config, sessionSvc SessionService, cultSvc cultivation.Service, loaders map[Page]PageLoader) *Router {
 	return &Router{
-		cfg:         cfg,
-		sessionSvc:  sessionSvc,
-		pageLoaders: loaders,
-		log:         logger.L().Named("menu.router"),
+		cfg:            cfg,
+		sessionSvc:     sessionSvc,
+		cultivationSvc: cultSvc,
+		pageLoaders:    loaders,
+		log:            logger.L().Named("menu.router"),
 	}
 }
 
@@ -159,19 +165,75 @@ func (r *Router) handleProfileAction(s *discordgo.Session, i *discordgo.Interact
 
 // handleCultivationAction phân luồng các action button thuộc trang Tu Luyện.
 func (r *Router) handleCultivationAction(s *discordgo.Session, i *discordgo.Interaction, session *Session, action string) {
+	ctx := context.Background()
+	in := cultivation.CultivationActionInput{UserID: session.UserID, GuildID: session.GuildID, Now: time.Now().UTC()}
+	var err error
+	var msg string
+
 	switch action {
 	case ActionMeditate:
-		// TODO v0.2: tĩnh tu — kiểm tra cooldown → cộng exp → cập nhật DB
-		ui.RespondEphemeralError(s, i, ui.MsgComingSoon)
+		res, e := r.cultivationSvc.Meditate(ctx, in)
+		err = e
+		if res != nil {
+			msg = res.Message
+		}
 	case ActionClosedDoor:
-		// TODO v0.2: bế quan
-		ui.RespondEphemeralError(s, i, ui.MsgComingSoon)
+		res, e := r.cultivationSvc.Seclusion(ctx, in)
+		err = e
+		if res != nil {
+			msg = res.Message
+		}
+	case ActionBodyTraining:
+		res, e := r.cultivationSvc.BodyTraining(ctx, in)
+		err = e
+		if res != nil {
+			msg = res.Message
+		}
 	case ActionBreakthrough:
-		// TODO v0.2: đột phá cảnh giới
-		ui.RespondEphemeralError(s, i, ui.MsgComingSoon)
+		bIn := cultivation.BreakthroughInput{UserID: session.UserID, GuildID: session.GuildID, Now: time.Now().UTC(), Rand: rand.New(rand.NewSource(time.Now().UnixNano()))}
+		res, e := r.cultivationSvc.Breakthrough(ctx, bIn)
+		err = e
+		if res != nil {
+			msg = res.Message
+		}
 	default:
 		ui.RespondEphemeralError(s, i, ui.MsgComingSoon)
+		return
 	}
+
+	// Xử lý báo lỗi (nếu có)
+	if err != nil {
+		var cdErr *apperrors.CooldownError
+		switch {
+		case errors.As(err, &cdErr):
+			ui.RespondEphemeralWarning(s, i, fmt.Sprintf("Đạo hữu cần nghỉ ngơi. Vui lòng chờ %s.", cdErr.Remaining))
+		case apperrors.IsInsufficientStamina(err):
+			ui.RespondEphemeralWarning(s, i, "Thể lực không đủ! Xin hãy nghỉ ngơi.")
+		case apperrors.IsInsufficientFunds(err):
+			ui.RespondEphemeralWarning(s, i, "Linh thạch không đủ để chuẩn bị trận pháp đột phá!")
+		case errors.Is(err, apperrors.ErrInsufficientCultivationExp):
+			ui.RespondEphemeralWarning(s, i, "Tu vi chưa đạt bình cảnh, không thể miễn cưỡng đột phá.")
+		case errors.Is(err, apperrors.ErrInsufficientMindState):
+			ui.RespondEphemeralWarning(s, i, "Tâm cảnh quá thấp, đột phá lúc này chắc chắn tẩu hỏa nhập ma!")
+		case errors.Is(err, apperrors.ErrMaxRealmReached):
+			ui.RespondEphemeralWarning(s, i, "Đạo hữu đã đứng trên đỉnh phong vạn giới, không thể tiến thêm.")
+		default:
+			r.log.Error("Cultivation action error", zap.Error(err))
+			ui.RespondEphemeralError(s, i, ui.MsgGenericError)
+		}
+		return
+	}
+
+	// Thành công: báo popup và render lại page để thấy tiến độ mới
+	_ = s.InteractionRespond(i, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Embeds: []*discordgo.MessageEmbed{ui.SuccessEmbed("Tu Luyện", msg)},
+			Flags:  discordgo.MessageFlagsEphemeral,
+		},
+	})
+	// Update menu parent ở background (làm mới thông số)
+	r.renderPage(s, i, session, PageCultivation)
 }
 
 // renderPage gọi PageLoader tương ứng và chỉnh sửa message menu hiện tại.

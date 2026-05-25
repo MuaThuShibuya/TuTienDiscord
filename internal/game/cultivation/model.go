@@ -21,16 +21,6 @@ const (
 	// TODO v0.2+: thêm cảnh giới cao hơn
 )
 
-// MindState tâm cảnh tu luyện.
-type MindState string
-
-const (
-	MindStateCalm      MindState = "calm"        // Bình Tĩnh
-	MindStateFocused   MindState = "focused"     // Chuyên Tâm
-	MindStateUnstable  MindState = "unstable"    // Bất Ổn
-	MindStateEnlighten MindState = "enlightened" // Ngộ Đạo
-)
-
 // CultivationPath đạo lộ tu luyện.
 type CultivationPath string
 
@@ -54,7 +44,7 @@ type CultivationProfile struct {
 	CombatPower            int64              `bson:"combatPower"            json:"combatPower"`
 	Stamina                int                `bson:"stamina"                json:"stamina"` // Thể lực hiện tại
 	MaxStamina             int                `bson:"maxStamina"             json:"maxStamina"`
-	MindState              MindState          `bson:"mindState"              json:"mindState"`
+	MindState              int                `bson:"mindState"              json:"mindState"` // 0 - 100
 	Path                   CultivationPath    `bson:"path"                   json:"path"`
 	CreatedAt              time.Time          `bson:"createdAt"              json:"createdAt"`
 	UpdatedAt              time.Time          `bson:"updatedAt"              json:"updatedAt"`
@@ -70,24 +60,76 @@ func (r Realm) DisplayName() string {
 	if name, ok := names[r]; ok {
 		return name
 	}
-	return "Không Rõ"
+	return string(r)
 }
 
 // MindStateDisplayName trả về tên tiếng Việt của tâm cảnh.
-func (m MindState) DisplayName() string {
-	names := map[MindState]string{
-		MindStateCalm:      "Bình Tĩnh",
-		MindStateFocused:   "Chuyên Tâm",
-		MindStateUnstable:  "Bất Ổn",
-		MindStateEnlighten: "Ngộ Đạo",
+func (c *CultivationProfile) MindStateDisplayName() string {
+	switch {
+	case c.MindState >= 80:
+		return "Ngộ Đạo"
+	case c.MindState >= 50:
+		return "Bình Tĩnh"
+	case c.MindState >= 20:
+		return "Bất Ổn"
+	default:
+		return "Tâm Ma Xâm Nhập"
 	}
-	if name, ok := names[m]; ok {
-		return name
-	}
-	return "Không Rõ"
 }
 
 // CanBreakthrough kiểm tra xem có thể đột phá không (exp đủ).
 func (c *CultivationProfile) CanBreakthrough() bool {
 	return c.CultivationExp >= c.CultivationExpRequired
+}
+
+// --- DTOs cho Service ---
+
+type CultivationActionInput struct {
+	UserID  string
+	GuildID string
+	Now     time.Time
+}
+
+type BreakthroughInput struct {
+	UserID  string
+	GuildID string
+	Now     time.Time
+	Rand    RandomSource
+}
+
+type RandomSource interface {
+	Float64() float64
+}
+
+type CultivationActionResult struct {
+	Action              string
+	ExpGained           int64
+	CombatPowerGained   int64
+	StaminaSpent        int
+	NewCultivationExp   int64
+	CultivationRequired int64
+	NewCombatPower      int64
+	NewStamina          int
+	NewMindState        int
+	CooldownExpiresAt   time.Time
+	Message             string
+}
+
+type BreakthroughResult struct {
+	Success                bool
+	OldRealm               string
+	OldRealmLevel          int
+	NewRealm               string
+	NewRealmLevel          int
+	AdvancedRealm          bool
+	CostPaid               int64
+	ExpChanged             int64
+	CombatPowerGained      int64
+	NewCultivationExp      int64
+	NewCultivationRequired int64
+	NewMindState           int
+	CooldownExpiresAt      time.Time
+	Rate                   float64
+	Roll                   float64
+	Message                string
 }

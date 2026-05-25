@@ -45,7 +45,7 @@ type CultivationMenuVM struct {
 	SessionID       string
 	DaoName         string
 	RealmDisplay    string // "Luyện Khí tầng 1"
-	MindState       string // "Bình Tĩnh"
+	MindState       string // "Bình Tĩnh (50/100)"
 	PathDisplay     string // "Kiếm Tu" hoặc "Chưa chọn đạo lộ"
 	StaminaBar      string // "████░░ 80/100"
 	ExpBar          string // "███░░░ 500/1.000 tu vi"

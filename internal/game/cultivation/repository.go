@@ -15,5 +15,8 @@ type Repository interface {
 
 	// Upsert tạo mới hoặc cập nhật hồ sơ tu luyện.
 	Upsert(ctx context.Context, profile *CultivationProfile) error
-	// TODO v0.2: thêm AddExp, SetRealm, SetMindState với atomic update
+
+	// UpdateStats cập nhật các chỉ số bị thay đổi trong quá trình tu luyện (Atomic).
+	// Không ghi đè các trường bất biến như ID hay CreatedAt.
+	UpdateStats(ctx context.Context, profile *CultivationProfile) error
 }

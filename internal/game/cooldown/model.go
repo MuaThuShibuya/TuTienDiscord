@@ -15,12 +15,16 @@ import (
 type Action string
 
 const (
-	ActionCultivate Action = "cultivate" // Tĩnh tu
-	ActionDungeon   Action = "dungeon"   // Phó bản
-	ActionDaily     Action = "daily"     // Điểm danh hàng ngày
-	ActionGacha     Action = "gacha"     // Quay cơ duyên
-	ActionPvP       Action = "pvp"       // PvP
-	ActionBoss      Action = "boss"      // Boss server
+	ActionCultivate    Action = "cultivate"     // Tĩnh tu
+	ActionMeditate     Action = "meditate"      // Tĩnh tu
+	ActionSeclusion    Action = "seclusion"     // Bế quan
+	ActionBodyTraining Action = "body_training" // Luyện thể
+	ActionBreakthrough Action = "breakthrough"  // Đột phá
+	ActionDungeon      Action = "dungeon"       // Phó bản
+	ActionDaily        Action = "daily"         // Điểm danh hàng ngày
+	ActionGacha        Action = "gacha"         // Quay cơ duyên
+	ActionPvP          Action = "pvp"           // PvP
+	ActionBoss         Action = "boss"          // Boss server
 	// TODO v0.2+: thêm action mới khi xây dựng các hệ thống tương ứng
 )
 

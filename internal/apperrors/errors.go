@@ -15,16 +15,22 @@ import (
 // --- Sentinel errors (lỗi mẫu để kiểm tra bằng errors.Is) ---
 
 var (
-	ErrNotFound          = errors.New("not found")          // Không tìm thấy dữ liệu
-	ErrAlreadyExists     = errors.New("already exists")     // Dữ liệu đã tồn tại
-	ErrInvalidInput      = errors.New("invalid input")      // Input không hợp lệ
-	ErrInvalidDaoName    = errors.New("invalid dao name")   // Đạo hiệu không hợp lệ (quá ngắn, quá dài, rỗng)
-	ErrPermissionDenied  = errors.New("permission denied")  // Không có quyền
-	ErrSessionExpired    = errors.New("session expired")    // Phiên menu đã hết hạn
-	ErrSessionNotOwner   = errors.New("not session owner")  // Không phải chủ phiên menu
-	ErrCooldownActive    = errors.New("cooldown active")    // Đang trong thời gian hồi chiêu
-	ErrInsufficientFunds = errors.New("insufficient funds") // Không đủ tài nguyên
-	ErrDatabaseTimeout   = errors.New("database timeout")   // Thao tác DB bị timeout
+	ErrNotFound                   = errors.New("not found")          // Không tìm thấy dữ liệu
+	ErrAlreadyExists              = errors.New("already exists")     // Dữ liệu đã tồn tại
+	ErrInvalidInput               = errors.New("invalid input")      // Input không hợp lệ
+	ErrInvalidDaoName             = errors.New("invalid dao name")   // Đạo hiệu không hợp lệ (quá ngắn, quá dài, rỗng)
+	ErrPermissionDenied           = errors.New("permission denied")  // Không có quyền
+	ErrSessionExpired             = errors.New("session expired")    // Phiên menu đã hết hạn
+	ErrSessionNotOwner            = errors.New("not session owner")  // Không phải chủ phiên menu
+	ErrCooldownActive             = errors.New("cooldown active")    // Đang trong thời gian hồi chiêu
+	ErrInsufficientFunds          = errors.New("insufficient funds") // Không đủ tài nguyên
+	ErrDatabaseTimeout            = errors.New("database timeout")   // Thao tác DB bị timeout
+	ErrInsufficientStamina        = errors.New("insufficient stamina")
+	ErrInsufficientCultivationExp = errors.New("insufficient cultivation exp")
+	ErrInsufficientMindState      = errors.New("insufficient mind state")
+	ErrMaxRealmReached            = errors.New("max realm reached")
+	ErrBreakthroughFailed         = errors.New("breakthrough failed")
+	ErrInvalidAction              = errors.New("invalid action")
 )
 
 // --- AppError: lỗi có cấu trúc mang thông điệp tiếng Việt cho user ---
@@ -54,13 +60,14 @@ func New(code, userMessage string, cause error) *AppError {
 
 // --- Kiểm tra loại lỗi ---
 
-func IsNotFound(err error) bool          { return errors.Is(err, ErrNotFound) }
-func IsAlreadyExists(err error) bool     { return errors.Is(err, ErrAlreadyExists) }
-func IsInvalidDaoName(err error) bool    { return errors.Is(err, ErrInvalidDaoName) }
-func IsSessionExpired(err error) bool    { return errors.Is(err, ErrSessionExpired) }
-func IsSessionNotOwner(err error) bool   { return errors.Is(err, ErrSessionNotOwner) }
-func IsCooldownActive(err error) bool    { return errors.Is(err, ErrCooldownActive) }
-func IsInsufficientFunds(err error) bool { return errors.Is(err, ErrInsufficientFunds) }
+func IsNotFound(err error) bool            { return errors.Is(err, ErrNotFound) }
+func IsAlreadyExists(err error) bool       { return errors.Is(err, ErrAlreadyExists) }
+func IsInvalidDaoName(err error) bool      { return errors.Is(err, ErrInvalidDaoName) }
+func IsSessionExpired(err error) bool      { return errors.Is(err, ErrSessionExpired) }
+func IsSessionNotOwner(err error) bool     { return errors.Is(err, ErrSessionNotOwner) }
+func IsCooldownActive(err error) bool      { return errors.Is(err, ErrCooldownActive) }
+func IsInsufficientFunds(err error) bool   { return errors.Is(err, ErrInsufficientFunds) }
+func IsInsufficientStamina(err error) bool { return errors.Is(err, ErrInsufficientStamina) }
 
 // UserFacing trích xuất thông điệp tiếng Việt từ AppError.
 // Nếu không phải AppError, trả về fallback.
@@ -70,4 +77,14 @@ func UserFacing(err error, fallback string) string {
 		return appErr.UserMessage
 	}
 	return fallback
+}
+
+// CooldownError mang thông tin thời gian còn lại để hiển thị cho user.
+type CooldownError struct {
+	Action    string
+	Remaining string // Đã format, VD: "4 phút 30 giây"
+}
+
+func (e *CooldownError) Error() string {
+	return fmt.Sprintf("cooldown active cho action %s, còn lại %s", e.Action, e.Remaining)
 }

@@ -41,6 +41,7 @@ const (
 	// Cultivation
 	ActionMeditate     = "meditate"     // Tĩnh tu
 	ActionClosedDoor   = "closeddoor"   // Bế quan
+	ActionBodyTraining = "bodytraining" // Luyện thể
 	ActionBreakthrough = "breakthrough" // Đột phá
 )
 

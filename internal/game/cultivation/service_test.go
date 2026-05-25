@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"sync"
 	"testing"
+	"time"
 
 	apperrors "github.com/whiskey/tu-tien-bot/internal/apperrors"
 	"github.com/whiskey/tu-tien-bot/internal/game/cultivation"
@@ -50,6 +51,28 @@ func (r *memCultivationRepo) Upsert(_ context.Context, profile *cultivation.Cult
 	return nil
 }
 
+func (r *memCultivationRepo) UpdateStats(_ context.Context, profile *cultivation.CultivationProfile) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	existing, ok := r.profiles[key(profile.UserID, profile.GuildID)]
+	if !ok {
+		return fmt.Errorf("%w: cultivation update failed", apperrors.ErrNotFound)
+	}
+
+	profile.UpdatedAt = time.Now().UTC()
+	existing.Realm = profile.Realm
+	existing.RealmLevel = profile.RealmLevel
+	existing.CultivationExp = profile.CultivationExp
+	existing.CultivationExpRequired = profile.CultivationExpRequired
+	existing.CombatPower = profile.CombatPower
+	existing.Stamina = profile.Stamina
+	existing.MindState = profile.MindState
+	existing.UpdatedAt = profile.UpdatedAt
+
+	return nil
+}
+
 // --- Test setup ---
 
 func TestMain(m *testing.M) {
@@ -63,7 +86,7 @@ func TestMain(m *testing.M) {
 // --- Tests ---
 
 func TestGetOrCreate_NewProfile(t *testing.T) {
-	svc := cultivation.NewService(newMemCultivationRepo())
+	svc := cultivation.NewService(newMemCultivationRepo(), nil, nil)
 	ctx := context.Background()
 
 	profile, err := svc.GetOrCreate(ctx, "user1", "guild1")
@@ -83,7 +106,7 @@ func TestGetOrCreate_NewProfile(t *testing.T) {
 }
 
 func TestGetOrCreate_ExistingProfile(t *testing.T) {
-	svc := cultivation.NewService(newMemCultivationRepo())
+	svc := cultivation.NewService(newMemCultivationRepo(), nil, nil)
 	ctx := context.Background()
 
 	first, _ := svc.GetOrCreate(ctx, "user2", "guild1")
@@ -98,7 +121,7 @@ func TestGetOrCreate_ExistingProfile(t *testing.T) {
 }
 
 func TestGetProfile_NotFound(t *testing.T) {
-	svc := cultivation.NewService(newMemCultivationRepo())
+	svc := cultivation.NewService(newMemCultivationRepo(), nil, nil)
 	ctx := context.Background()
 
 	_, err := svc.GetProfile(ctx, "ghost", "guild1")
@@ -108,7 +131,7 @@ func TestGetProfile_NotFound(t *testing.T) {
 }
 
 func TestGetProfile_Found(t *testing.T) {
-	svc := cultivation.NewService(newMemCultivationRepo())
+	svc := cultivation.NewService(newMemCultivationRepo(), nil, nil)
 	ctx := context.Background()
 
 	svc.GetOrCreate(ctx, "user3", "guild1")
@@ -122,14 +145,14 @@ func TestGetProfile_Found(t *testing.T) {
 }
 
 func TestDefaultValues(t *testing.T) {
-	svc := cultivation.NewService(newMemCultivationRepo())
+	svc := cultivation.NewService(newMemCultivationRepo(), nil, nil)
 	ctx := context.Background()
 
 	p, _ := svc.GetOrCreate(ctx, "user4", "guild1")
 
-	// Tâm cảnh khởi đầu phải là Bình Tĩnh
-	if p.MindState != cultivation.MindStateCalm {
-		t.Errorf("MindState khởi đầu sai: muốn %s, có %s", cultivation.MindStateCalm, p.MindState)
+	// Tâm cảnh khởi đầu phải là 50 (Bình Tĩnh)
+	if p.MindState != 50 {
+		t.Errorf("MindState khởi đầu sai: muốn 50, có %d", p.MindState)
 	}
 	// Thể lực phải > 0
 	if p.MaxStamina <= 0 {

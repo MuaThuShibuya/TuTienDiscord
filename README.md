@@ -142,6 +142,14 @@ Xem [docs/VERSION_PLAN.md](docs/VERSION_PLAN.md) để biết kế hoạch từn
 
 Xem [docs/SECURITY.md](docs/SECURITY.md) để biết các quy tắc bảo mật.
 
+## MongoDB Schema Migration
+
+- MongoDB không ép schema cứng.
+- Nếu đổi field từ `string` sang `int` (ví dụ: `mindState` ở v0.2), dữ liệu cũ có thể decode lỗi trong Go (`cannot decode string into an integer type`).
+- Bắt buộc phải chạy script migration (như `scripts/mongo_fix_cultivation_schema.js`) khi đổi model.
+- Runtime không được dùng dữ liệu giả (fake data chỉ dùng trong mock testing).
+- Database cũ/cùng cluster phải tách `MONGODB_DATABASE` rõ ràng để tránh xung đột schema.
+
 ---
 
 > Dự án game tu tiên thuần giải trí. Không có giao dịch tiền thật. Gacha chỉ dùng tài nguyên trong game.

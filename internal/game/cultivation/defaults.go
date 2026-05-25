@@ -9,14 +9,14 @@ import "go.mongodb.org/mongo-driver/bson/primitive"
 
 // Giá trị khởi đầu cho người chơi mới tạo tài khoản.
 const (
-	DefaultRealm          = RealmQiRefining // Cảnh giới bắt đầu: Luyện Khí
+	DefaultRealm          = Realm("Phàm Nhân") // Cảnh giới bắt đầu v0.2
 	DefaultRealmLevel     = 1
 	DefaultCultivationExp = int64(0)
-	DefaultExpRequired    = int64(1000) // Tu vi cần để lên tầng tiếp theo
+	DefaultExpRequired    = int64(200) // Khớp với CalculateNextExpRequired
 	DefaultCombatPower    = int64(100)
 	DefaultStamina        = 100
 	DefaultMaxStamina     = 100
-	DefaultMindState      = MindStateCalm
+	DefaultMindState      = 50 // Khởi đầu v0.2: Tâm cảnh Bình tĩnh (50/100)
 	DefaultPath           = PathNone
 )
 

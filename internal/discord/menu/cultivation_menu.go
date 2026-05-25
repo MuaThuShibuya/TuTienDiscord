@@ -44,7 +44,8 @@ func buildCultivationComponents(sessionID string, canBreakthrough bool) []discor
 	row1 := ui.ActionRow(
 		ui.Button("Tĩnh Tu", Build(DomainCultivation, ActionMeditate, sessionID), ui.BtnPrimary, &ui.EmojiCultivate, false),
 		ui.Button("Bế Quan", Build(DomainCultivation, ActionClosedDoor, sessionID), ui.BtnPrimary, &ui.EmojiLock, false),
-		ui.Button("Đột Phá", Build(DomainCultivation, ActionBreakthrough, sessionID), ui.BtnSuccess, &ui.EmojiBreakthrough, !canBreakthrough),
+		ui.Button("Luyện Thể", Build(DomainCultivation, ActionBodyTraining, sessionID), ui.BtnSecondary, &ui.EmojiStamina, false),
+		ui.Button("Đột Phá", Build(DomainCultivation, ActionBreakthrough, sessionID), ui.BtnDanger, &ui.EmojiBreakthrough, false),
 	)
 	navRow := ui.NavRow(sessionID, string(PageCultivation), string(PageMain))
 
