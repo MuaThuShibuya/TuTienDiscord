@@ -109,15 +109,12 @@ func (r *Router) handleNav(s *discordgo.Session, i *discordgo.Interaction, sessi
 	switch action {
 	case ActionClose:
 		_ = r.sessionSvc.Close(ctx, session.SessionID)
+		// Gửi tín hiệu phản hồi ngay để tránh Discord báo lỗi timeout
 		_ = s.InteractionRespond(i, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseUpdateMessage,
-			Data: &discordgo.InteractionResponseData{
-				Embeds: []*discordgo.MessageEmbed{
-					ui.InfoEmbed("Đã Đóng", "Giao diện đã được đóng. Dùng `/menu` để mở lại."),
-				},
-				Components: []discordgo.MessageComponent{},
-			},
+			Type: discordgo.InteractionResponseDeferredMessageUpdate,
 		})
+		// Xóa hoàn toàn tin nhắn menu để giữ kênh gọn gàng
+		_ = s.ChannelMessageDelete(i.ChannelID, i.Message.ID)
 
 	case ActionRefresh:
 		page := Page(extra)
@@ -224,16 +221,14 @@ func (r *Router) handleCultivationAction(s *discordgo.Session, i *discordgo.Inte
 		return
 	}
 
-	// Thành công: báo popup và render lại page để thấy tiến độ mới
-	_ = s.InteractionRespond(i, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{
-			Embeds: []*discordgo.MessageEmbed{ui.SuccessEmbed("Tu Luyện", msg)},
-			Flags:  discordgo.MessageFlagsEphemeral,
-		},
-	})
-	// Update menu parent ở background (làm mới thông số)
+	// 1. Cập nhật message gốc ngay lập tức (Real-time UI Edit)
 	r.renderPage(s, i, session, PageCultivation)
+
+	// 2. Gửi thông báo kết quả dạng popup ẩn (Followup Message)
+	_, _ = s.FollowupMessageCreate(i, true, &discordgo.WebhookParams{
+		Embeds: []*discordgo.MessageEmbed{ui.SuccessEmbed("Tu Luyện", msg)},
+		Flags:  discordgo.MessageFlagsEphemeral,
+	})
 }
 
 // renderPage gọi PageLoader tương ứng và chỉnh sửa message menu hiện tại.
