@@ -1,8 +1,8 @@
 // File: internal/database/indexes.go
-// Version: v0.1
-// Purpose: Create and ensure MongoDB indexes for all collections on startup.
-// Security: No secrets involved. Index creation is idempotent and safe to run multiple times.
-// Notes: Add new indexes here as new collections are introduced in later versions.
+// Phiên bản: v0.1.2
+// Mục đích: Tạo và đảm bảo các MongoDB index cho toàn bộ collection khi khởi động.
+// Bảo mật: Không liên quan đến secret. Tạo index là thao tác idempotent, an toàn khi gọi lại nhiều lần.
+// Ghi chú: Thêm index mới vào đây khi bổ sung collection trong các phiên bản sau.
 
 package database
 
@@ -15,13 +15,13 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.uber.org/zap"
 
-	"github.com/yourname/tu-tien-bot/internal/logger"
+	"github.com/whiskey/tu-tien-bot/internal/logger"
 )
 
 const indexTimeout = 30 * time.Second
 
-// EnsureIndexes creates all required indexes for the application.
-// This is idempotent — safe to call on every startup.
+// EnsureIndexes tạo toàn bộ index cần thiết cho ứng dụng.
+// Idempotent — gọi lại nhiều lần không gây lỗi nếu index đã tồn tại.
 func EnsureIndexes(ctx context.Context, db *mongo.Database) error {
 	log := logger.L()
 
@@ -32,37 +32,41 @@ func EnsureIndexes(ctx context.Context, db *mongo.Database) error {
 
 	if err := ensurePlayerIndexes(indexCtx, db); err != nil {
 		errs = append(errs, err)
-		log.Error("Failed to create player indexes", zap.Error(err))
+		log.Error("Không tạo được index cho collection players", zap.Error(err))
 	}
 
 	if err := ensureCultivationIndexes(indexCtx, db); err != nil {
 		errs = append(errs, err)
-		log.Error("Failed to create cultivation indexes", zap.Error(err))
+		log.Error("Không tạo được index cho collection cultivation_profiles", zap.Error(err))
 	}
 
 	if err := ensureWalletIndexes(indexCtx, db); err != nil {
 		errs = append(errs, err)
-		log.Error("Failed to create wallet indexes", zap.Error(err))
+		log.Error("Không tạo được index cho collection wallets", zap.Error(err))
 	}
 
 	if err := ensureCooldownIndexes(indexCtx, db); err != nil {
 		errs = append(errs, err)
-		log.Error("Failed to create cooldown indexes", zap.Error(err))
+		log.Error("Không tạo được index cho collection cooldowns", zap.Error(err))
 	}
 
 	if err := ensureMenuSessionIndexes(indexCtx, db); err != nil {
 		errs = append(errs, err)
-		log.Error("Failed to create menu_sessions indexes", zap.Error(err))
+		log.Error("Không tạo được index cho collection menu_sessions", zap.Error(err))
 	}
 
 	if len(errs) > 0 {
+		// Trả về lỗi đầu tiên — caller (main.go) sẽ Fatal và không khởi động
 		return errs[0]
 	}
 
-	log.Info("MongoDB indexes ensured successfully")
+	log.Info("Đã đảm bảo MongoDB indexes")
 	return nil
 }
 
+// ensurePlayerIndexes tạo index cho collection players.
+// - Unique compound (userId + guildId): ngăn tạo trùng người chơi trong cùng server.
+// - Index lastActiveAt: truy vấn nhanh người chơi hoạt động gần đây.
 func ensurePlayerIndexes(ctx context.Context, db *mongo.Database) error {
 	col := db.Collection("players")
 	_, err := col.Indexes().CreateMany(ctx, []mongo.IndexModel{
@@ -78,6 +82,8 @@ func ensurePlayerIndexes(ctx context.Context, db *mongo.Database) error {
 	return err
 }
 
+// ensureCultivationIndexes tạo index cho collection cultivation_profiles.
+// - Unique compound (userId + guildId): mỗi người chơi chỉ có 1 hồ sơ tu luyện mỗi server.
 func ensureCultivationIndexes(ctx context.Context, db *mongo.Database) error {
 	col := db.Collection("cultivation_profiles")
 	_, err := col.Indexes().CreateMany(ctx, []mongo.IndexModel{
@@ -89,6 +95,8 @@ func ensureCultivationIndexes(ctx context.Context, db *mongo.Database) error {
 	return err
 }
 
+// ensureWalletIndexes tạo index cho collection wallets.
+// - Unique compound (userId + guildId): mỗi người chơi chỉ có 1 ví mỗi server.
 func ensureWalletIndexes(ctx context.Context, db *mongo.Database) error {
 	col := db.Collection("wallets")
 	_, err := col.Indexes().CreateMany(ctx, []mongo.IndexModel{
@@ -100,6 +108,9 @@ func ensureWalletIndexes(ctx context.Context, db *mongo.Database) error {
 	return err
 }
 
+// ensureCooldownIndexes tạo index cho collection cooldowns.
+// - Unique compound (userId + guildId + action): mỗi hành động chỉ có 1 cooldown mỗi người chơi.
+// - TTL index trên expiresAt: MongoDB tự động xóa document đã hết hạn (tránh rác dữ liệu).
 func ensureCooldownIndexes(ctx context.Context, db *mongo.Database) error {
 	col := db.Collection("cooldowns")
 	_, err := col.Indexes().CreateMany(ctx, []mongo.IndexModel{
@@ -108,6 +119,7 @@ func ensureCooldownIndexes(ctx context.Context, db *mongo.Database) error {
 			Options: options.Index().SetUnique(true).SetName("idx_cooldown_user_guild_action"),
 		},
 		{
+			// TTL index: MongoDB daemon xóa document khi expiresAt < now
 			Keys:    bson.D{{Key: "expiresAt", Value: 1}},
 			Options: options.Index().SetExpireAfterSeconds(0).SetName("idx_cooldown_ttl"),
 		},
@@ -115,6 +127,10 @@ func ensureCooldownIndexes(ctx context.Context, db *mongo.Database) error {
 	return err
 }
 
+// ensureMenuSessionIndexes tạo index cho collection menu_sessions.
+// - Unique sessionId: mỗi phiên menu có ID duy nhất (dùng để validate ownership).
+// - Compound (userId + guildId): tìm nhanh phiên theo người chơi.
+// - TTL index trên expiresAt: tự động xóa phiên hết hạn sau MENU_SESSION_TTL_MINUTES.
 func ensureMenuSessionIndexes(ctx context.Context, db *mongo.Database) error {
 	col := db.Collection("menu_sessions")
 	_, err := col.Indexes().CreateMany(ctx, []mongo.IndexModel{
@@ -127,6 +143,7 @@ func ensureMenuSessionIndexes(ctx context.Context, db *mongo.Database) error {
 			Options: options.Index().SetName("idx_session_user_guild"),
 		},
 		{
+			// TTL index: phiên menu tự xóa sau khi hết hạn
 			Keys:    bson.D{{Key: "expiresAt", Value: 1}},
 			Options: options.Index().SetExpireAfterSeconds(0).SetName("idx_session_ttl"),
 		},

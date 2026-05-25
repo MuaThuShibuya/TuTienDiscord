@@ -1,8 +1,8 @@
 // File: internal/database/mongo.go
-// Version: v0.1
-// Purpose: Manage MongoDB Atlas connection lifecycle — connect, ping, and disconnect.
-// Security: MongoDB URI is read from config (env var). Never logged or exposed.
-// Notes: Always use context with timeout for every DB operation. Call Disconnect on shutdown.
+// Phiên bản: v0.1.1
+// Mục đích: Quản lý vòng đời kết nối MongoDB Atlas — kết nối, ping, và ngắt kết nối.
+// Bảo mật: MongoDB URI đọc từ config (env var). Không bao giờ log hoặc expose URI.
+// Ghi chú: Luôn dùng context có timeout cho mọi thao tác DB. Gọi Disconnect khi tắt app.
 
 package database
 
@@ -15,7 +15,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.uber.org/zap"
 
-	"github.com/yourname/tu-tien-bot/internal/logger"
+	"github.com/whiskey/tu-tien-bot/internal/logger"
 )
 
 const (
@@ -24,15 +24,15 @@ const (
 	defaultTimeout = 10 * time.Second
 )
 
-// Client wraps the MongoDB client and exposes the target database.
+// Client bọc MongoDB client và expose database mục tiêu.
 type Client struct {
 	client   *mongo.Client
 	database *mongo.Database
 	dbName   string
 }
 
-// Connect establishes a connection to MongoDB Atlas and verifies it with a ping.
-// Returns a Client ready for use, or an error if connection fails.
+// Connect kết nối đến MongoDB Atlas và xác minh bằng ping.
+// Trả về Client sẵn dùng, hoặc lỗi nếu kết nối thất bại.
 func Connect(ctx context.Context, uri, dbName string) (*Client, error) {
 	log := logger.L()
 
@@ -46,7 +46,7 @@ func Connect(ctx context.Context, uri, dbName string) (*Client, error) {
 
 	mongoClient, err := mongo.Connect(connectCtx, clientOpts)
 	if err != nil {
-		return nil, fmt.Errorf("database: connect failed: %w", err)
+		return nil, fmt.Errorf("database: connect thất bại: %w", err)
 	}
 
 	pingCtx, pingCancel := context.WithTimeout(ctx, pingTimeout)
@@ -54,10 +54,10 @@ func Connect(ctx context.Context, uri, dbName string) (*Client, error) {
 
 	if err := mongoClient.Ping(pingCtx, nil); err != nil {
 		_ = mongoClient.Disconnect(context.Background())
-		return nil, fmt.Errorf("database: ping failed: %w", err)
+		return nil, fmt.Errorf("database: ping thất bại: %w", err)
 	}
 
-	log.Info("Connected to MongoDB Atlas", zap.String("database", dbName))
+	log.Info("Đã kết nối MongoDB Atlas", zap.String("database", dbName))
 
 	return &Client{
 		client:   mongoClient,
@@ -66,30 +66,30 @@ func Connect(ctx context.Context, uri, dbName string) (*Client, error) {
 	}, nil
 }
 
-// DB returns the target mongo.Database for collection access.
+// DB trả về mongo.Database mục tiêu để truy cập collection.
 func (c *Client) DB() *mongo.Database {
 	return c.database
 }
 
-// Collection returns a named collection from the target database.
+// Collection trả về collection theo tên từ database mục tiêu.
 func (c *Client) Collection(name string) *mongo.Collection {
 	return c.database.Collection(name)
 }
 
-// NewContext returns a context with the standard DB operation timeout.
+// NewContext trả về context với timeout chuẩn cho thao tác DB.
 func NewContext() (context.Context, context.CancelFunc) {
 	return context.WithTimeout(context.Background(), defaultTimeout)
 }
 
-// IsConnected pings MongoDB and returns true if the connection is healthy.
+// IsConnected ping MongoDB và trả về true nếu kết nối còn hoạt động.
 func (c *Client) IsConnected() bool {
 	ctx, cancel := context.WithTimeout(context.Background(), pingTimeout)
 	defer cancel()
 	return c.client.Ping(ctx, nil) == nil
 }
 
-// Disconnect cleanly closes the MongoDB connection. Call on application shutdown.
+// Disconnect đóng kết nối MongoDB graceful. Gọi khi tắt ứng dụng.
 func (c *Client) Disconnect(ctx context.Context) error {
-	logger.L().Info("Disconnecting from MongoDB")
+	logger.L().Info("Đang ngắt kết nối MongoDB")
 	return c.client.Disconnect(ctx)
 }

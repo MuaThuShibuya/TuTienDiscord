@@ -1,10 +1,10 @@
 // File: cmd/bot/main.go
-// Version: v0.1
-// Purpose: Application entrypoint. Wires all dependencies and manages the service lifecycle.
-// Security: Loads all secrets from environment variables via config.Load(). Never hardcodes tokens.
-//           Fails fast on missing required environment variables.
-// Notes: Dependency injection order: config → logger → DB → repositories → services → handlers → bot.
-//        Graceful shutdown on SIGINT/SIGTERM flushes logs and closes all connections cleanly.
+// Phiên bản: v0.1.1
+// Mục đích: Điểm khởi động ứng dụng. Wire toàn bộ dependency và quản lý vòng đời service.
+// Bảo mật: Tất cả secret (token, URI, ID) đọc từ env var qua config.Load(), không hardcode.
+//           Thoát ngay nếu thiếu env var bắt buộc.
+// Ghi chú: Thứ tự injection: config → logger → DB → repository → service → handler → bot.
+//          Graceful shutdown khi nhận SIGINT/SIGTERM: xả log, đóng DB, ngắt Discord.
 
 package main
 
@@ -18,53 +18,58 @@ import (
 	"github.com/joho/godotenv"
 	"go.uber.org/zap"
 
-	"github.com/yourname/tu-tien-bot/internal/config"
-	"github.com/yourname/tu-tien-bot/internal/database"
-	"github.com/yourname/tu-tien-bot/internal/discord"
-	"github.com/yourname/tu-tien-bot/internal/discord/handlers"
-	discordmenu "github.com/yourname/tu-tien-bot/internal/discord/menu"
-	"github.com/yourname/tu-tien-bot/internal/logger"
-	"github.com/yourname/tu-tien-bot/internal/scheduler"
-	"github.com/yourname/tu-tien-bot/internal/server"
+	"github.com/whiskey/tu-tien-bot/internal/config"
+	"github.com/whiskey/tu-tien-bot/internal/database"
+	"github.com/whiskey/tu-tien-bot/internal/discord"
+	"github.com/whiskey/tu-tien-bot/internal/discord/handlers"
+	discordmenu "github.com/whiskey/tu-tien-bot/internal/discord/menu"
+	"github.com/whiskey/tu-tien-bot/internal/logger"
+	"github.com/whiskey/tu-tien-bot/internal/scheduler"
+	"github.com/whiskey/tu-tien-bot/internal/server"
 
-	cultivationrepo "github.com/yourname/tu-tien-bot/internal/game/cultivation"
-	economyrepo "github.com/yourname/tu-tien-bot/internal/game/economy"
-	profilerepo "github.com/yourname/tu-tien-bot/internal/game/profile"
-	cooldownrepo "github.com/yourname/tu-tien-bot/internal/game/cooldown"
+	cooldownpkg "github.com/whiskey/tu-tien-bot/internal/game/cooldown"
+	cultivationpkg "github.com/whiskey/tu-tien-bot/internal/game/cultivation"
+	economypkg "github.com/whiskey/tu-tien-bot/internal/game/economy"
+	profilepkg "github.com/whiskey/tu-tien-bot/internal/game/profile"
 )
 
 func main() {
-	// Load .env for local development (ignored in production where env vars are set directly)
+	// Tải .env cho môi trường local (bỏ qua nếu không có file — production dùng env trực tiếp)
 	_ = godotenv.Load()
 
-	// --- 1. Config ---
+	// --- 1. Cấu hình ---
 	cfg, err := config.Load()
 	if err != nil {
-		// Logger not yet initialized; use fmt
-		println("FATAL: config error:", err.Error())
+		// Logger chưa khởi tạo — dùng println
+		println("FATAL: lỗi cấu hình:", err.Error())
 		os.Exit(1)
 	}
 
 	// --- 2. Logger ---
-	if err := logger.Init(cfg.Log.Level); err != nil {
-		println("FATAL: logger init failed:", err.Error())
+	if err := logger.Init(logger.Options{
+		Level:         cfg.Log.Level,
+		Format:        cfg.Log.Format,
+		Color:         cfg.Log.Color,
+		CallerEnabled: cfg.Log.CallerEnabled,
+	}); err != nil {
+		println("FATAL: không khởi tạo được logger:", err.Error())
 		os.Exit(1)
 	}
 	defer logger.Sync()
 	log := logger.L()
 
-	log.Info("Starting Tu Tien Bot",
+	log.Info("Khởi động Vạn Pháp Tiên Nghịch Bot",
 		zap.String("app", cfg.App.Name),
 		zap.String("version", cfg.App.Version),
 		zap.String("env", cfg.App.Env),
 	)
 
-	// --- 3. Database ---
+	// --- 3. Kết nối Database ---
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	db, err := database.Connect(ctx, cfg.MongoDB.URI, cfg.MongoDB.Database)
 	cancel()
 	if err != nil {
-		log.Fatal("Failed to connect to MongoDB", zap.Error(err))
+		log.Fatal("Không kết nối được MongoDB", zap.Error(err))
 	}
 	defer func() {
 		shutdownCtx, sc := context.WithTimeout(context.Background(), 10*time.Second)
@@ -72,30 +77,30 @@ func main() {
 		_ = db.Disconnect(shutdownCtx)
 	}()
 
-	// Ensure indexes
+	// Tạo indexes MongoDB (TTL, unique, sparse)
 	idxCtx, idxCancel := context.WithTimeout(context.Background(), 30*time.Second)
 	if err := database.EnsureIndexes(idxCtx, db.DB()); err != nil {
-		log.Fatal("Failed to ensure MongoDB indexes", zap.Error(err))
+		log.Fatal("Không tạo được MongoDB indexes", zap.Error(err))
 	}
 	idxCancel()
 
-	// --- 4. Repositories ---
-	profileRepo     := profilerepo.NewRepository(db.DB())
-	cultivationRepo := cultivationrepo.NewRepository(db.DB())
-	economyRepo     := economyrepo.NewRepository(db.DB())
-	cooldownRepo    := cooldownrepo.NewRepository(db.DB())
-	sessionRepo     := discordmenu.NewRepository(db.DB())
+	// --- 4. Repositories (chỉ MongoDB) ---
+	profileRepo := profilepkg.NewMongoRepository(db.DB())
+	cultivationRepo := cultivationpkg.NewMongoRepository(db.DB())
+	economyRepo := economypkg.NewMongoRepository(db.DB())
+	cooldownRepo := cooldownpkg.NewMongoRepository(db.DB())
+	sessionRepo := discordmenu.NewSessionRepository(db.DB())
 
-	// --- 5. Services ---
-	profileSvc     := profilerepo.NewService(profileRepo)
-	cultivationSvc := cultivationrepo.NewService(cultivationRepo)
-	economySvc     := economyrepo.NewService(economyRepo)
-	_              = cooldownrepo.NewService(cooldownRepo) // registered; used from v0.2
-	sessionSvc     := discordmenu.NewService(sessionRepo)
+	// --- 5. Services (business logic) ---
+	profileSvc := profilepkg.NewService(profileRepo)
+	cultivationSvc := cultivationpkg.NewService(cultivationRepo)
+	economySvc := economypkg.NewService(economyRepo)
+	_ = cooldownpkg.NewService(cooldownRepo) // đã wire; dùng từ v0.2
+	sessionSvc := discordmenu.NewSessionService(sessionRepo)
 
 	// --- 6. Handlers (Controllers) ---
 	startHandler := handlers.NewStartHandler(profileSvc, cultivationSvc, economySvc)
-	menuHandler  := handlers.NewMenuHandler(cfg, profileSvc, cultivationSvc, economySvc, sessionSvc)
+	menuHandler := handlers.NewMenuHandler(cfg, profileSvc, cultivationSvc, economySvc, sessionSvc)
 
 	// --- 7. Menu router ---
 	menuRouter := discordmenu.NewRouter(cfg, sessionSvc, menuHandler.PageLoaders())
@@ -106,16 +111,17 @@ func main() {
 	// --- 9. Discord bot ---
 	bot, err := discord.NewBot(cfg, discordRouter)
 	if err != nil {
-		log.Fatal("Failed to create Discord bot", zap.Error(err))
+		log.Fatal("Không tạo được Discord bot", zap.Error(err))
 	}
+	// Timeout đủ rộng để chờ Ready event trước khi đăng ký lệnh
 	startCtx, startCancel := context.WithTimeout(context.Background(), 30*time.Second)
 	if err := bot.Start(startCtx); err != nil {
 		startCancel()
-		log.Fatal("Failed to start Discord bot", zap.Error(err))
+		log.Fatal("Không khởi động được Discord bot", zap.Error(err))
 	}
 	startCancel()
 
-	// --- 10. HTTP server (health check) ---
+	// --- 10. HTTP server (health check cho Render / uptime monitor) ---
 	httpServer := server.NewHTTPServer(cfg, db)
 	httpServer.Start()
 
@@ -126,14 +132,14 @@ func main() {
 	sessionCleaner := scheduler.NewSessionCleaner(db.DB())
 	sessionCleaner.Start()
 
-	log.Info("Bot is running. Press Ctrl+C to stop.")
+	log.Info("Bot đang chạy. Nhấn Ctrl+C để tắt.")
 
 	// --- 12. Graceful shutdown ---
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
 	<-quit
 
-	log.Info("Shutdown signal received — cleaning up...")
+	log.Info("Nhận tín hiệu tắt — đang dọn dẹp...")
 
 	keepalive.Stop()
 	sessionCleaner.Stop()
@@ -144,5 +150,5 @@ func main() {
 
 	bot.Stop()
 
-	log.Info("Shutdown complete.")
+	log.Info("Tắt hoàn tất.")
 }

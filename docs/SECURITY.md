@@ -14,47 +14,96 @@
 - **Menu ownership**: Mỗi menu session gắn với một `userId`. Người khác bấm menu của bạn nhận lỗi ephemeral.
 - **Session ID**: Dùng `crypto/rand` (16 bytes = 32 hex chars). Không thể đoán được.
 - **custom_id validation**: Mọi button/select đều phải parse và validate sessionId + userId trước khi xử lý.
-- **Input sanitization**: `daoName` (đạo hiệu) phải trim, giới hạn độ dài, kiểm tra rune count.
+- **Input sanitization**: `daoName` (đạo hiệu) phải trim, giới hạn rune count — dùng `utf8.RuneCountInString`, không dùng `len()` (sai với UTF-8 tiếng Việt).
 - **No user-controlled logic**: Action names trong custom_id luôn là server-side constants, không phải text người dùng nhập.
 
 ## Economy Security
 
-- Tất cả thay đổi currency dùng atomic MongoDB `$inc` + filter `balance >= deduct_amount`.
+### Ngăn chặn Double-Spend
+
+Lỗ hổng double-spend xảy ra khi user gửi nhiều request đồng thời để tiêu cùng một khoản tiền:
+
+```
+Goroutine A: read balance=500 → 500 >= 300 ✓ → write balance=200
+Goroutine B: read balance=500 → 500 >= 300 ✓ → write balance=200   ← DOUBLE SPEND!
+```
+
+**Giải pháp bắt buộc cho MongoDB repository**:
+
+```go
+// SAI: đọc trước, check, rồi update → TOCTOU race condition
+wallet, _ := col.FindOne(filter)
+if wallet.SpiritStones >= amount { col.UpdateOne(..., $inc) }
+
+// ĐÚNG: atomic conditional update — chỉ update khi balance đủ
+result := col.FindOneAndUpdate(
+    bson.M{"userId": uid, "guildId": gid, "spiritStones": bson.M{"$gte": amount}},
+    bson.M{"$inc": bson.M{"spiritStones": -amount}},
+    options.FindOneAndUpdate().SetReturnDocument(options.After),
+)
+if result.Err() == mongo.ErrNoDocuments {
+    return nil, apperrors.ErrInsufficientFunds  // balance không đủ HOẶC user không tồn tại
+}
+```
+
+TTL của câu lệnh: đây là một round trip DB duy nhất, atomic theo MongoDB's document-level locking.
+
+### Currency Rules
+
+- Tất cả thay đổi currency dùng atomic MongoDB `$inc` kết hợp filter `balance >= amount`.
 - Không bao giờ accept số lượng currency trực tiếp từ Discord user input.
-- Currency âm bị chặn ở tầng repository (`adjustCurrency` filter).
-- **Không gacha tiền thật**: Gacha chỉ nhận vé cơ duyên và linh ngọc trong game.
-- **Không đấu giá tiền thật**: Toàn bộ thị trường chỉ dùng tài nguyên game.
+- Số âm bị chặn tại tầng service (`EarnSpiritStones` từ chối `amount <= 0`).
+- **Không gacha tiền thật**: Gacha chỉ nhận vé cơ duyên (FateTickets) và linh ngọc (SpiritJades).
+- **Không đấu giá tiền thật**: Thị trường chỉ dùng tài nguyên in-game.
 
-## Anti-Race-Condition (Cần áp dụng từ v0.2+)
+## Anti-Race-Condition
 
-Các thao tác sau **phải** dùng atomic update hoặc idempotency key:
+### Đã bảo vệ (v0.1.x)
 
-| Thao tác | Giải pháp |
+| Thao tác | Cơ chế bảo vệ |
 |---|---|
-| Gacha | Idempotency key + atomic pull count |
-| Mua vật phẩm | Atomic $inc balance + item insert trong 1 session |
-| Đấu giá | Optimistic lock + version field |
-| Nhận thưởng boss | Idempotency key per (userId, bossId, round) |
-| Đột phá cảnh giới | Atomic check-and-set realm |
-| PvP | Combat session lock (userId không thể vào 2 PvP cùng lúc) |
+| Chi tiêu linh thạch | Atomic `$inc` với filter `balance >= amount` |
+| Chi tiêu linh ngọc | Atomic `$inc` với filter `balance >= amount` |
+| Chi tiêu vé cơ duyên | Atomic `$inc` với filter `fateTickets >= amount` |
+| Menu session ownership | SessionID ngẫu nhiên + validate userId mỗi interaction |
+| Cooldown | TTL index tự xóa + Upsert thay vì insert |
+
+### Cần bảo vệ từ v0.2+
+
+| Thao tác | Giải pháp đề xuất |
+|---|---|
+| Gacha nhiều vé | Idempotency key + atomic decrement vé trước khi roll |
+| Nhận thưởng nhiệm vụ | `insertOne` với unique index `(userId, questId, round)` |
+| Đột phá cảnh giới | Atomic compare-and-swap: `{"realm": currentRealm, "exp": {"$gte": required}}` |
+| PvP | Combat session lock: unique index `(userId, "in_pvp")` — xóa khi combat kết thúc |
+| Mua vật phẩm | MongoDB transaction hoặc atomic item+balance trong 1 session |
+| Nhận thưởng boss | Idempotency key `(userId, bossId, spawnRound)` |
 
 ## Content Safety
 
-- **Đạo lữ/song tu**: Chỉ là buff đồng hành, nhiệm vụ đôi, kỹ năng hợp kích. Không tạo nội dung nhạy cảm hay tình dục.
-- **NPC**: Chỉ tương tác game (nhiệm vụ, mua bán). Không roleplay nội dung nhạy cảm.
+- **Đạo lữ/song tu**: Chỉ là buff đồng hành, nhiệm vụ đôi, kỹ năng hợp kích. Không tạo nội dung nhạy cảm.
+- **NPC**: Chỉ tương tác game (nhiệm vụ, mua bán). Không roleplay nội dung không phù hợp.
 - **Chat**: Bot không lưu nội dung chat, không đọc tin nhắn người dùng.
 
 ## Database Security
 
-- MongoDB URI chứa credentials — không log, không in ra stdout.
-- Mọi query đều có context timeout (`database.NewContext()`).
+- MongoDB URI chứa credentials — không log, không in ra stdout dù ở level debug.
+- Mọi query đều có context timeout (`database.NewContext()` hoặc `context.WithTimeout`).
 - Index trên `(userId, guildId)` ngăn full-collection scan.
-- TTL index tự xóa dữ liệu hết hạn (cooldown, session).
-- Mỗi query **phải có** `guildId` filter để chống data leak giữa các server.
+- TTL index tự xóa dữ liệu hết hạn (cooldown, menu_session).
+- Mọi query **bắt buộc có** `guildId` filter để chống data leak giữa các Discord server.
+- Database name riêng biệt (`tu_tien_bot`) — không dùng chung với bot khác.
+
+## Logging Security
+
+- **Không log**: `DISCORD_TOKEN`, `MONGODB_URI`, password, API key.
+- **LOG_FORMAT=json** khi production: structured log không chứa ANSI escape code.
+- **LOG_COLOR=false** khi production/CI: tránh làm ô nhiễm log aggregator (Datadog, Loki, CloudWatch).
+- Log level `info` cho production — tránh `debug` vì có thể tiết lộ internal state.
 
 ## Deployment Security
 
 - Docker: chạy với non-root user (`botuser`).
-- Render: đặt env vars trong Render dashboard, không trong code.
-- VPS: dùng systemd `EnvironmentFile` hoặc vault, không file `.env` trên server.
-- HTTPS: Render tự cấp TLS. VPS dùng Nginx + Let's Encrypt.
+- Render: đặt env vars trong Render Dashboard → Environment, không trong code hoặc Dockerfile.
+- VPS: dùng systemd `EnvironmentFile=/etc/bot/env` hoặc Vault, không file `.env` trên server.
+- HTTPS: Render tự cấp TLS. VPS dùng Nginx reverse proxy + Let's Encrypt (`certbot`).

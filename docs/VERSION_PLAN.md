@@ -1,6 +1,6 @@
 # Version Plan — Vạn Pháp Tiên Nghịch
 
-## v0.1 — Foundation ✅ (hiện tại)
+## v0.1 — Foundation ✅ (đã xong)
 - Config từ env vars
 - MongoDB Atlas connection + indexes
 - Discord bot boot + graceful shutdown
@@ -16,7 +16,7 @@
 - Structured logging (zap)
 - Error handling chuẩn
 
-## v0.2 — Cultivation Core
+## v0.2 — Cultivation Core ✅ (hiện tại)
 - Tĩnh tu (cooldown, exp gain, stamina cost)
 - Bế quan (nhân hệ số tu vi, lock stamina)
 - Tu vi và tiến độ cảnh giới

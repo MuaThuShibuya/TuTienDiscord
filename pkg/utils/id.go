@@ -1,7 +1,7 @@
 // File: pkg/utils/id.go
-// Version: v0.1
-// Purpose: Generate unique IDs for menu sessions and other entities.
-// Notes: Uses crypto/rand for session IDs to prevent guessing attacks.
+// Phiên bản: v0.1.1
+// Mục đích: Sinh ID ngẫu nhiên cho phiên menu và các entity khác.
+// Bảo mật: Dùng crypto/rand để sinh session ID — ngăn tấn công đoán session.
 
 package utils
 
@@ -11,21 +11,21 @@ import (
 	"fmt"
 )
 
-// NewSessionID generates a cryptographically random 16-byte session ID (32 hex chars).
+// NewSessionID sinh session ID ngẫu nhiên bảo mật 16 byte (32 ký tự hex).
 func NewSessionID() string {
 	b := make([]byte, 16)
 	if _, err := rand.Read(b); err != nil {
-		// Fallback: should not happen in practice
-		panic(fmt.Sprintf("utils.NewSessionID: crypto/rand failed: %v", err))
+		// Không nên xảy ra trong thực tế
+		panic(fmt.Sprintf("utils.NewSessionID: crypto/rand thất bại: %v", err))
 	}
 	return hex.EncodeToString(b)
 }
 
-// NewShortID generates a shorter 8-byte random ID (16 hex chars) for non-security-critical use.
+// NewShortID sinh ID ngắn hơn 8 byte ngẫu nhiên (16 ký tự hex) cho mục đích không bảo mật cao.
 func NewShortID() string {
 	b := make([]byte, 8)
 	if _, err := rand.Read(b); err != nil {
-		panic(fmt.Sprintf("utils.NewShortID: crypto/rand failed: %v", err))
+		panic(fmt.Sprintf("utils.NewShortID: crypto/rand thất bại: %v", err))
 	}
 	return hex.EncodeToString(b)
 }

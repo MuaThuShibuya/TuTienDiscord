@@ -1,8 +1,8 @@
 // File: internal/server/health.go
-// Version: v0.1
-// Purpose: HTTP health check handler for Render/uptime monitoring and keepalive pings.
-// Security: Returns no internal details — only status, app name, version, and DB connectivity.
-// Notes: GET /health is the only endpoint. Render uses this to verify the service is alive.
+// Phiên bản: v0.1.1
+// Mục đích: HTTP health check handler cho Render/uptime monitor và keepalive ping.
+// Bảo mật: Không trả về chi tiết nội bộ — chỉ trả về status, tên app, version, và trạng thái DB.
+// Ghi chú: GET /health là endpoint duy nhất. Render dùng endpoint này để xác minh service đang chạy.
 
 package server
 
@@ -12,12 +12,12 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/yourname/tu-tien-bot/internal/config"
-	"github.com/yourname/tu-tien-bot/internal/database"
-	"github.com/yourname/tu-tien-bot/internal/logger"
+	"github.com/whiskey/tu-tien-bot/internal/config"
+	"github.com/whiskey/tu-tien-bot/internal/database"
+	"github.com/whiskey/tu-tien-bot/internal/logger"
 )
 
-// HealthResponse is the JSON body returned by GET /health.
+// HealthResponse là JSON body trả về từ GET /health.
 type HealthResponse struct {
 	Status   string `json:"status"`
 	App      string `json:"app"`
@@ -25,7 +25,7 @@ type HealthResponse struct {
 	Database string `json:"database"`
 }
 
-// HealthHandler returns an http.HandlerFunc for the /health endpoint.
+// HealthHandler trả về http.HandlerFunc cho endpoint /health.
 func HealthHandler(cfg *config.Config, db *database.Client) http.HandlerFunc {
 	log := logger.L().Named("server.health")
 
@@ -38,7 +38,7 @@ func HealthHandler(cfg *config.Config, db *database.Client) http.HandlerFunc {
 		dbStatus := "connected"
 		if !db.IsConnected() {
 			dbStatus = "disconnected"
-			log.Warn("Health check: MongoDB is not reachable")
+			log.Warn("Health check: MongoDB không kết nối được")
 		}
 
 		resp := HealthResponse{
@@ -51,7 +51,7 @@ func HealthHandler(cfg *config.Config, db *database.Client) http.HandlerFunc {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		if err := json.NewEncoder(w).Encode(resp); err != nil {
-			log.Error("Health handler: failed to write response", zap.Error(err))
+			log.Error("Health handler: không ghi được response", zap.Error(err))
 		}
 	}
 }

@@ -1,4 +1,4 @@
-module github.com/yourname/tu-tien-bot
+module github.com/whiskey/tu-tien-bot
 
 go 1.22
 

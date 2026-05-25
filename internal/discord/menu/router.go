@@ -1,42 +1,41 @@
 // File: internal/discord/menu/router.go
-// Version: v0.1
-// Purpose: Route button/select-menu interactions inside the in-app menu system.
-//          Parses custom_id, validates session ownership, dispatches to the correct page renderer.
-// Security: Every interaction validates sessionId + userId before any state change or DB write.
-//           Users operating someone else's menu receive an ephemeral error message.
-// Notes: custom_id format: "<domain>:<action>:<sessionId>[:<extra>]"
-//        Example: "menu:nav:abc123" or "nav:back:abc123:main"
+// Phiên bản: v0.1.1
+// Mục đích: Phân luồng tương tác button/select-menu bên trong hệ thống menu game.
+//           Phân tích custom_id, xác thực chủ phiên, điều hướng đến page renderer tương ứng.
+// Bảo mật: Mọi tương tác đều xác thực sessionId + userId trước khi thay đổi trạng thái hoặc ghi DB.
+//           Người bấm menu của người khác nhận thông báo ephemeral riêng.
+// Ghi chú: Format custom_id: "<domain>:<action>:<sessionId>[:<extra>]"
+//          Ví dụ: "menu:nav:abc123" hoặc "nav:back:abc123:main"
 
 package menu
 
 import (
 	"context"
-	"strings"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
 	"go.uber.org/zap"
 
-	"github.com/yourname/tu-tien-bot/internal/config"
-	"github.com/yourname/tu-tien-bot/internal/discord/ui"
-	apperrors "github.com/yourname/tu-tien-bot/internal/errors"
-	"github.com/yourname/tu-tien-bot/internal/logger"
+	apperrors "github.com/whiskey/tu-tien-bot/internal/apperrors"
+	"github.com/whiskey/tu-tien-bot/internal/config"
+	"github.com/whiskey/tu-tien-bot/internal/discord/ui"
+	"github.com/whiskey/tu-tien-bot/internal/logger"
 )
 
-// PageLoader is a function that fetches all data needed for a page and returns the response data.
+// PageLoader là hàm tải toàn bộ dữ liệu cho một trang và trả về response data.
 type PageLoader func(ctx context.Context, session *Session) (*discordgo.InteractionResponseData, error)
 
-// Router handles all component interactions (button / select menu) inside the menu system.
+// Router xử lý mọi tương tác component (button / select menu) bên trong hệ thống menu.
 type Router struct {
 	cfg         *config.Config
-	sessionSvc  Service
+	sessionSvc  SessionService
 	pageLoaders map[Page]PageLoader
 	log         *zap.Logger
 }
 
-// NewRouter creates a menu interaction router.
-// pageLoaders maps each Page to a function that loads that page's data and returns its rendered response.
-func NewRouter(cfg *config.Config, sessionSvc Service, loaders map[Page]PageLoader) *Router {
+// NewRouter tạo menu interaction router.
+// pageLoaders ánh xạ mỗi Page sang hàm tải dữ liệu và render trang đó.
+func NewRouter(cfg *config.Config, sessionSvc SessionService, loaders map[Page]PageLoader) *Router {
 	return &Router{
 		cfg:         cfg,
 		sessionSvc:  sessionSvc,
@@ -45,72 +44,64 @@ func NewRouter(cfg *config.Config, sessionSvc Service, loaders map[Page]PageLoad
 	}
 }
 
-// Handle dispatches a Discord component interaction to the correct handler.
-// Called by the top-level discord router for all MessageComponent interactions.
+// Handle phân luồng một Discord component interaction đến handler phù hợp.
+// Được gọi bởi discord router cấp cao nhất cho mọi MessageComponent interaction.
 func (r *Router) Handle(s *discordgo.Session, i *discordgo.Interaction) {
-	var customID string
-	switch i.Type {
-	case discordgo.InteractionMessageComponent:
-		customID = i.MessageComponentData().CustomID
-	default:
+	if i.Type != discordgo.InteractionMessageComponent {
 		return
 	}
 
-	// Parse custom_id: "<domain>:<action>:<sessionId>[:<extra>]"
-	parts := strings.SplitN(customID, ":", 4)
-	if len(parts) < 3 {
-		r.log.Warn("menu.Router: malformed custom_id", zap.String("customID", customID))
-		ui.EphemeralError(s, i, ui.MsgGenericError)
-		return
-	}
+	customID := i.MessageComponentData().CustomID
 
-	domain := parts[0]
-	action := parts[1]
-	sessionID := parts[2]
-	extra := ""
-	if len(parts) == 4 {
-		extra = parts[3]
+	// Phân tích custom_id thành domain, action, sessionId, extra
+	parsed, err := Parse(customID)
+	if err != nil {
+		r.log.Warn("menu.Router: custom_id không hợp lệ", zap.String("customID", customID))
+		ui.RespondEphemeralError(s, i, ui.MsgGenericError)
+		return
 	}
 
 	ctx := context.Background()
 	userID := i.Member.User.ID
 
-	// --- Security: validate session ownership ---
-	session, err := r.sessionSvc.ValidateOwner(ctx, sessionID, userID)
+	// --- Bảo mật: xác thực chủ sở hữu phiên ---
+	session, err := r.sessionSvc.ValidateOwner(ctx, parsed.SessionID, userID)
 	if err != nil {
 		switch {
 		case apperrors.IsSessionExpired(err):
-			ui.EphemeralError(s, i, ui.MsgSessionExpired)
+			ui.RespondEphemeralError(s, i, ui.MsgSessionExpired)
 		default:
-			ui.EphemeralError(s, i, ui.MsgNotYourMenu)
+			ui.RespondEphemeralError(s, i, ui.MsgNotYourMenu)
 		}
 		return
 	}
 
-	// Refresh TTL on every interaction.
-	_ = r.sessionSvc.Refresh(ctx, sessionID, r.cfg.Menu.SessionTTL)
+	// Gia hạn TTL sau mỗi tương tác hợp lệ
+	_ = r.sessionSvc.Refresh(ctx, parsed.SessionID, r.cfg.Menu.SessionTTL)
 
-	switch domain {
-	case "nav":
-		r.handleNav(s, i, session, action, extra)
-	case "menu":
-		r.handleMenuSelect(s, i, session, action, i.MessageComponentData())
-	case "profile":
-		r.handleProfileAction(s, i, session, action)
-	case "cultivation":
-		r.handleCultivationAction(s, i, session, action)
+	switch parsed.Domain {
+	case DomainNav:
+		r.handleNav(s, i, session, parsed.Action, parsed.Extra)
+	case DomainMenuSelect:
+		r.handleMenuSelect(s, i, session, i.MessageComponentData())
+	case DomainProfile:
+		r.handleProfileAction(s, i, session, parsed.Action)
+	case DomainCultivation:
+		r.handleCultivationAction(s, i, session, parsed.Action)
 	default:
-		r.log.Warn("menu.Router: unknown domain", zap.String("domain", domain), zap.String("customID", customID))
-		ui.EphemeralError(s, i, ui.MsgComingSoon)
+		r.log.Warn("menu.Router: domain không xác định",
+			zap.String("domain", parsed.Domain),
+			zap.String("customID", customID))
+		ui.RespondEphemeralError(s, i, ui.MsgComingSoon)
 	}
 }
 
-// handleNav processes Làm mới / Quay lại / Đóng buttons.
+// handleNav xử lý các nút Làm mới / Quay lại / Đóng.
 func (r *Router) handleNav(s *discordgo.Session, i *discordgo.Interaction, session *Session, action, extra string) {
 	ctx := context.Background()
 
 	switch action {
-	case "close":
+	case ActionClose:
 		_ = r.sessionSvc.Close(ctx, session.SessionID)
 		_ = s.InteractionRespond(i, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseUpdateMessage,
@@ -122,14 +113,14 @@ func (r *Router) handleNav(s *discordgo.Session, i *discordgo.Interaction, sessi
 			},
 		})
 
-	case "refresh":
+	case ActionRefresh:
 		page := Page(extra)
 		if page == "" {
 			page = session.CurrentPage
 		}
 		r.renderPage(s, i, session, page)
 
-	case "back":
+	case ActionBack:
 		targetPage := Page(extra)
 		if targetPage == "" {
 			targetPage = PageMain
@@ -139,12 +130,12 @@ func (r *Router) handleNav(s *discordgo.Session, i *discordgo.Interaction, sessi
 		r.renderPage(s, i, session, targetPage)
 
 	default:
-		ui.EphemeralError(s, i, ui.MsgGenericError)
+		ui.RespondEphemeralError(s, i, ui.MsgGenericError)
 	}
 }
 
-// handleMenuSelect processes the category select menus on the main page.
-func (r *Router) handleMenuSelect(s *discordgo.Session, i *discordgo.Interaction, session *Session, action string, data discordgo.MessageComponentInteractionData) {
+// handleMenuSelect xử lý select menu danh mục trên trang chính.
+func (r *Router) handleMenuSelect(s *discordgo.Session, i *discordgo.Interaction, session *Session, data discordgo.MessageComponentInteractionData) {
 	if len(data.Values) == 0 {
 		return
 	}
@@ -155,39 +146,39 @@ func (r *Router) handleMenuSelect(s *discordgo.Session, i *discordgo.Interaction
 	r.renderPage(s, i, session, selected)
 }
 
-// handleProfileAction dispatches profile-specific button actions.
+// handleProfileAction phân luồng các action button thuộc trang Hồ Sơ.
 func (r *Router) handleProfileAction(s *discordgo.Session, i *discordgo.Interaction, session *Session, action string) {
 	switch action {
-	case "rename":
-		// TODO v0.1: open modal for dao name change
-		ui.EphemeralError(s, i, ui.MsgComingSoon)
+	case ActionRename:
+		// TODO v0.1: mở modal đổi đạo hiệu
+		ui.RespondEphemeralError(s, i, ui.MsgComingSoon)
 	default:
-		ui.EphemeralError(s, i, ui.MsgComingSoon)
+		ui.RespondEphemeralError(s, i, ui.MsgComingSoon)
 	}
 }
 
-// handleCultivationAction dispatches cultivation-specific button actions.
+// handleCultivationAction phân luồng các action button thuộc trang Tu Luyện.
 func (r *Router) handleCultivationAction(s *discordgo.Session, i *discordgo.Interaction, session *Session, action string) {
 	switch action {
-	case "meditate":
-		// TODO v0.2: tĩnh tu — cooldown check → exp gain → update DB
-		ui.EphemeralError(s, i, ui.MsgComingSoon)
-	case "closeddoor":
+	case ActionMeditate:
+		// TODO v0.2: tĩnh tu — kiểm tra cooldown → cộng exp → cập nhật DB
+		ui.RespondEphemeralError(s, i, ui.MsgComingSoon)
+	case ActionClosedDoor:
 		// TODO v0.2: bế quan
-		ui.EphemeralError(s, i, ui.MsgComingSoon)
-	case "breakthrough":
-		// TODO v0.2: đột phá
-		ui.EphemeralError(s, i, ui.MsgComingSoon)
+		ui.RespondEphemeralError(s, i, ui.MsgComingSoon)
+	case ActionBreakthrough:
+		// TODO v0.2: đột phá cảnh giới
+		ui.RespondEphemeralError(s, i, ui.MsgComingSoon)
 	default:
-		ui.EphemeralError(s, i, ui.MsgComingSoon)
+		ui.RespondEphemeralError(s, i, ui.MsgComingSoon)
 	}
 }
 
-// renderPage calls the appropriate PageLoader and edits the existing menu message.
+// renderPage gọi PageLoader tương ứng và chỉnh sửa message menu hiện tại.
 func (r *Router) renderPage(s *discordgo.Session, i *discordgo.Interaction, session *Session, page Page) {
 	loader, ok := r.pageLoaders[page]
 	if !ok {
-		ui.EphemeralError(s, i, ui.MsgComingSoon)
+		ui.RespondEphemeralError(s, i, ui.MsgComingSoon)
 		return
 	}
 
@@ -196,12 +187,12 @@ func (r *Router) renderPage(s *discordgo.Session, i *discordgo.Interaction, sess
 
 	responseData, err := loader(ctx, session)
 	if err != nil {
-		r.log.Error("menu.Router: page loader error",
+		r.log.Error("menu.Router: page loader thất bại",
 			zap.String("page", string(page)),
 			zap.String("userId", session.UserID),
 			zap.Error(err),
 		)
-		ui.EphemeralError(s, i, ui.MsgGenericError)
+		ui.UpdateWithError(s, i, ui.MsgGenericError)
 		return
 	}
 

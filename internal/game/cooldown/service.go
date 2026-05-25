@@ -1,8 +1,8 @@
 // File: internal/game/cooldown/service.go
-// Version: v0.1
-// Purpose: Business logic for cooldown — check if active, set, and clear cooldowns.
-// Security: Action names are always server-side constants. Never pass raw user input as action.
-// Notes: IsOnCooldown returns false if DB lookup fails, to avoid blocking players due to DB errors.
+// Phiên bản: v0.1.1
+// Mục đích: Business logic cooldown — kiểm tra, thiết lập, xóa cooldown.
+// Bảo mật: Action luôn là hằng server-side — không nhận tên action từ user input.
+// Ghi chú: IsOnCooldown trả về false nếu lỗi DB để không chặn người chơi oan.
 
 package cooldown
 
@@ -12,62 +12,58 @@ import (
 
 	"go.uber.org/zap"
 
-	apperrors "github.com/yourname/tu-tien-bot/internal/errors"
-	"github.com/yourname/tu-tien-bot/internal/logger"
+	apperrors "github.com/whiskey/tu-tien-bot/internal/apperrors"
+	"github.com/whiskey/tu-tien-bot/internal/logger"
 )
 
-// Service defines cooldown business operations.
+// Service định nghĩa nghiệp vụ quản lý cooldown.
 type Service interface {
-	// IsOnCooldown returns (true, remaining) if the action is on cooldown.
+	// IsOnCooldown trả về (true, thời_gian_còn_lại) nếu đang trong cooldown.
 	IsOnCooldown(ctx context.Context, userID, guildID string, action Action) (bool, time.Duration)
-	// SetCooldown starts a cooldown for the given duration.
+
+	// SetCooldown bắt đầu cooldown trong khoảng thời gian duration.
 	SetCooldown(ctx context.Context, userID, guildID string, action Action, duration time.Duration) error
-	// ClearCooldown removes a cooldown before it expires (e.g., admin reset).
+
+	// ClearCooldown xóa cooldown trước khi hết hạn (dùng cho admin reset).
 	ClearCooldown(ctx context.Context, userID, guildID string, action Action) error
 }
 
-type service struct {
+type cooldownService struct {
 	repo Repository
 	log  *zap.Logger
 }
 
-// NewService creates a new cooldown service.
+// NewService tạo cooldown service.
 func NewService(repo Repository) Service {
-	return &service{repo: repo, log: logger.L().Named("cooldown.service")}
+	return &cooldownService{repo: repo, log: logger.L().Named("cooldown.service")}
 }
 
-func (s *service) IsOnCooldown(ctx context.Context, userID, guildID string, action Action) (bool, time.Duration) {
+func (s *cooldownService) IsOnCooldown(ctx context.Context, userID, guildID string, action Action) (bool, time.Duration) {
 	cd, err := s.repo.Get(ctx, userID, guildID, action)
 	if err != nil {
 		if !apperrors.IsNotFound(err) {
-			s.log.Warn("IsOnCooldown DB error (allowing action)",
-				zap.String("userId", userID),
-				zap.String("action", string(action)),
-				zap.Error(err),
-			)
+			// Lỗi DB không mong đợi — log nhưng không chặn người chơi
+			s.log.Warn("IsOnCooldown: lỗi DB (cho phép hành động)",
+				zap.String("userId", userID), zap.String("action", string(action)), zap.Error(err))
 		}
 		return false, 0
 	}
-	remaining := cd.RemainingDuration()
+	remaining := cd.Remaining()
 	if remaining <= 0 {
 		return false, 0
 	}
 	return true, remaining
 }
 
-func (s *service) SetCooldown(ctx context.Context, userID, guildID string, action Action, duration time.Duration) error {
+func (s *cooldownService) SetCooldown(ctx context.Context, userID, guildID string, action Action, duration time.Duration) error {
 	if err := s.repo.Set(ctx, userID, guildID, action, duration); err != nil {
-		s.log.Error("SetCooldown failed",
-			zap.String("userId", userID),
-			zap.String("action", string(action)),
-			zap.Duration("duration", duration),
-			zap.Error(err),
-		)
+		s.log.Error("SetCooldown thất bại",
+			zap.String("userId", userID), zap.String("action", string(action)), zap.Error(err))
 		return err
 	}
 	return nil
 }
 
-func (s *service) ClearCooldown(ctx context.Context, userID, guildID string, action Action) error {
+func (s *cooldownService) ClearCooldown(ctx context.Context, userID, guildID string, action Action) error {
 	return s.repo.Delete(ctx, userID, guildID, action)
 }

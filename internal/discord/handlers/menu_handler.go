@@ -1,48 +1,51 @@
 // File: internal/discord/handlers/menu_handler.go
-// Version: v0.1
-// Purpose: Controller for the /menu slash command — opens or re-opens the all-in-one game menu.
-// Security: Verifies player is registered before opening menu. Menu session uses cryptographic sessionId.
-//           All subsequent button/select interactions are validated through menu.Router.
-// Notes: /menu always opens the main page. Navigation between pages happens via menu.Router.
-//        PageLoaders are injected so this handler stays decoupled from DB access.
+// Phiên bản: v0.1.1
+// Mục đích: Controller cho lệnh /menu — mở giao diện game tổng hợp.
+// Bảo mật: Xác minh người chơi đã đăng ký trước khi tạo phiên menu.
+//           Session dùng sessionId sinh ngẫu nhiên (crypto/rand). Mọi tương tác sau đó
+//           đều được xác thực qua menu.Router.
+// Ghi chú: /menu luôn mở trang Main. Điều hướng giữa các trang xảy ra qua menu.Router.
+//           PageLoader được inject để handler không trực tiếp gọi DB.
 
 package handlers
 
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
 	"go.uber.org/zap"
 
-	"github.com/yourname/tu-tien-bot/internal/config"
-	"github.com/yourname/tu-tien-bot/internal/discord/menu"
-	"github.com/yourname/tu-tien-bot/internal/discord/ui"
-	apperrors "github.com/yourname/tu-tien-bot/internal/errors"
-	"github.com/yourname/tu-tien-bot/internal/game/cultivation"
-	"github.com/yourname/tu-tien-bot/internal/game/economy"
-	"github.com/yourname/tu-tien-bot/internal/game/profile"
-	"github.com/yourname/tu-tien-bot/internal/logger"
+	apperrors "github.com/whiskey/tu-tien-bot/internal/apperrors"
+	"github.com/whiskey/tu-tien-bot/internal/config"
+	"github.com/whiskey/tu-tien-bot/internal/discord/menu"
+	"github.com/whiskey/tu-tien-bot/internal/discord/ui"
+	"github.com/whiskey/tu-tien-bot/internal/game/cultivation"
+	"github.com/whiskey/tu-tien-bot/internal/game/economy"
+	"github.com/whiskey/tu-tien-bot/internal/game/profile"
+	"github.com/whiskey/tu-tien-bot/internal/logger"
+	"github.com/whiskey/tu-tien-bot/pkg/utils"
 )
 
-// MenuHandler handles the /menu command and provides PageLoaders for the menu router.
+// MenuHandler xử lý lệnh /menu và cung cấp PageLoader cho menu router.
 type MenuHandler struct {
 	cfg            *config.Config
 	profileSvc     profile.Service
 	cultivationSvc cultivation.Service
 	economySvc     economy.Service
-	sessionSvc     menu.Service
+	sessionSvc     menu.SessionService
 	log            *zap.Logger
 }
 
-// NewMenuHandler creates a new MenuHandler.
+// NewMenuHandler tạo MenuHandler với các service đã inject.
 func NewMenuHandler(
 	cfg *config.Config,
 	profileSvc profile.Service,
 	cultivationSvc cultivation.Service,
 	economySvc economy.Service,
-	sessionSvc menu.Service,
+	sessionSvc menu.SessionService,
 ) *MenuHandler {
 	return &MenuHandler{
 		cfg:            cfg,
@@ -54,10 +57,10 @@ func NewMenuHandler(
 	}
 }
 
-// Handle processes the /menu slash command.
+// Handle xử lý lệnh slash /menu.
 func (h *MenuHandler) Handle(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	if i.Member == nil || i.GuildID == "" {
-		ui.EphemeralError(s, i.Interaction, "Lệnh này chỉ dùng được trong server Discord.")
+		ui.RespondEphemeralError(s, i.Interaction, "Lệnh này chỉ dùng được trong server Discord.")
 		return
 	}
 
@@ -68,88 +71,78 @@ func (h *MenuHandler) Handle(s *discordgo.Session, i *discordgo.InteractionCreat
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
-	h.log.Debug("/menu invoked", zap.String("userId", userID), zap.String("guildId", guildID))
+	h.log.Debug("/menu được gọi", zap.String("userId", userID), zap.String("guildId", guildID))
 
-	// 1. Ensure player exists
+	// 1. Kiểm tra người chơi đã đăng ký chưa
 	player, err := h.profileSvc.GetPlayer(ctx, userID, guildID)
 	if err != nil {
 		if apperrors.IsNotFound(err) {
-			ui.EphemeralError(s, i.Interaction, ui.MsgNotRegistered)
+			ui.RespondEphemeralError(s, i.Interaction, ui.MsgNotRegistered)
 			return
 		}
-		h.log.Error("/menu: GetPlayer failed",
-			zap.String("userId", userID), zap.Error(err))
-		ui.EphemeralError(s, i.Interaction, ui.MsgGenericError)
+		h.log.Error("/menu: GetPlayer thất bại", zap.String("userId", userID), zap.Error(err))
+		ui.RespondEphemeralError(s, i.Interaction, ui.MsgGenericError)
 		return
 	}
 
-	// 2. Load cultivation + wallet
+	// 2. Tải hồ sơ tu luyện và ví
 	cult, err := h.cultivationSvc.GetOrCreate(ctx, userID, guildID)
 	if err != nil {
-		h.log.Error("/menu: GetOrCreate cultivation failed",
-			zap.String("userId", userID), zap.Error(err))
-		ui.EphemeralError(s, i.Interaction, ui.MsgGenericError)
+		h.log.Error("/menu: GetOrCreate cultivation thất bại", zap.String("userId", userID), zap.Error(err))
+		ui.RespondEphemeralError(s, i.Interaction, ui.MsgGenericError)
 		return
 	}
 
 	wallet, err := h.economySvc.GetOrCreate(ctx, userID, guildID)
 	if err != nil {
-		h.log.Error("/menu: GetOrCreate wallet failed",
-			zap.String("userId", userID), zap.Error(err))
-		ui.EphemeralError(s, i.Interaction, ui.MsgGenericError)
+		h.log.Error("/menu: GetOrCreate wallet thất bại", zap.String("userId", userID), zap.Error(err))
+		ui.RespondEphemeralError(s, i.Interaction, ui.MsgGenericError)
 		return
 	}
 
-	// 3. Open a new menu session
+	// 3. Tạo phiên menu mới
 	session, err := h.sessionSvc.OpenMenu(ctx, userID, guildID, channelID, h.cfg.Menu.SessionTTL)
 	if err != nil {
-		h.log.Error("/menu: OpenMenu failed",
-			zap.String("userId", userID), zap.Error(err))
-		ui.EphemeralError(s, i.Interaction, ui.MsgGenericError)
+		h.log.Error("/menu: OpenMenu thất bại", zap.String("userId", userID), zap.Error(err))
+		ui.RespondEphemeralError(s, i.Interaction, ui.MsgGenericError)
 		return
 	}
 
-	// 4. Build main menu response
-	responseData := menu.BuildMainMenuResponse(&menu.MainMenuData{
-		Session:     session,
-		Player:      player,
-		Cultivation: cult,
-		Wallet:      wallet,
-	})
+	// 4. Map domain models → ViewModel → gọi UI Builder
+	vm := toMainMenuVM(session, player, cult, wallet)
+	responseData := menu.BuildMainMenuResponse(vm)
 
-	// 5. Respond to the interaction (creates a new public or ephemeral message)
+	// 5. Gửi response (tạo message mới)
 	err = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: responseData,
 	})
 	if err != nil {
-		h.log.Error("/menu: InteractionRespond failed",
-			zap.String("userId", userID), zap.Error(err))
+		h.log.Error("/menu: InteractionRespond thất bại", zap.String("userId", userID), zap.Error(err))
 		return
 	}
 
-	// 6. Save the Discord message ID so future edits work
+	// 6. Lưu message ID để có thể chỉnh sửa sau
 	msg, err := s.InteractionResponse(i.Interaction)
 	if err == nil && msg != nil {
 		_ = h.sessionSvc.SetMessageID(ctx, session.SessionID, msg.ID)
 	}
 
-	// 7. Update last active
+	// 7. Cập nhật lần cuối hoạt động
 	h.profileSvc.TouchLastActive(ctx, userID, guildID)
 }
 
-// PageLoaders returns a map of page → loader functions for use by menu.Router.
-// Each loader fetches all required data and calls the corresponding UI builder.
+// PageLoaders trả về map page → loader function để menu.Router dùng khi điều hướng.
 func (h *MenuHandler) PageLoaders() map[menu.Page]menu.PageLoader {
 	return map[menu.Page]menu.PageLoader{
 		menu.PageMain:        h.loadMainPage,
 		menu.PageProfile:     h.loadProfilePage,
 		menu.PageCultivation: h.loadCultivationPage,
-		// TODO v0.3+: add PageInventory, PageSkills, PagePets, PageGacha, PageMarket, PageSect
+		// TODO v0.3+: thêm PageInventory, PageSkills, PagePets, PageGacha, PageMarket, PageSect
 	}
 }
 
-// loadMainPage fetches all data needed for the main page and returns the rendered response.
+// loadMainPage tải dữ liệu và render trang Main Menu.
 func (h *MenuHandler) loadMainPage(ctx context.Context, session *menu.Session) (*discordgo.InteractionResponseData, error) {
 	player, err := h.profileSvc.GetPlayer(ctx, session.UserID, session.GuildID)
 	if err != nil {
@@ -163,15 +156,10 @@ func (h *MenuHandler) loadMainPage(ctx context.Context, session *menu.Session) (
 	if err != nil {
 		return nil, fmt.Errorf("loadMainPage wallet: %w", err)
 	}
-	return menu.BuildMainMenuEdit(&menu.MainMenuData{
-		Session:     session,
-		Player:      player,
-		Cultivation: cult,
-		Wallet:      wallet,
-	}), nil
+	return menu.BuildMainMenuEdit(toMainMenuVM(session, player, cult, wallet)), nil
 }
 
-// loadProfilePage fetches profile data and returns the profile page response.
+// loadProfilePage tải dữ liệu và render trang Hồ Sơ.
 func (h *MenuHandler) loadProfilePage(ctx context.Context, session *menu.Session) (*discordgo.InteractionResponseData, error) {
 	player, err := h.profileSvc.GetPlayer(ctx, session.UserID, session.GuildID)
 	if err != nil {
@@ -181,14 +169,10 @@ func (h *MenuHandler) loadProfilePage(ctx context.Context, session *menu.Session
 	if err != nil {
 		return nil, fmt.Errorf("loadProfilePage wallet: %w", err)
 	}
-	return menu.BuildProfileMenuResponse(&menu.ProfileMenuData{
-		Session: session,
-		Player:  player,
-		Wallet:  wallet,
-	}), nil
+	return menu.BuildProfileMenuResponse(toProfileMenuVM(session, player, wallet)), nil
 }
 
-// loadCultivationPage fetches cultivation data and returns the cultivation page response.
+// loadCultivationPage tải dữ liệu và render trang Tu Luyện.
 func (h *MenuHandler) loadCultivationPage(ctx context.Context, session *menu.Session) (*discordgo.InteractionResponseData, error) {
 	player, err := h.profileSvc.GetPlayer(ctx, session.UserID, session.GuildID)
 	if err != nil {
@@ -198,9 +182,78 @@ func (h *MenuHandler) loadCultivationPage(ctx context.Context, session *menu.Ses
 	if err != nil {
 		return nil, fmt.Errorf("loadCultivationPage cultivation: %w", err)
 	}
-	return menu.BuildCultivationMenuResponse(&menu.CultivationMenuData{
-		Session:     session,
-		Player:      player,
-		Cultivation: cult,
-	}), nil
+	return menu.BuildCultivationMenuResponse(toCultivationMenuVM(session, player, cult)), nil
+}
+
+// --- ViewModel mapping functions ---
+// Tất cả logic format dữ liệu (số, progress bar, timestamp) nằm ở đây,
+// UI Builder chỉ nhận chuỗi đã format sẵn.
+
+func toMainMenuVM(session *menu.Session, player *profile.Player, cult *cultivation.CultivationProfile, wallet *economy.Wallet) *menu.MainMenuVM {
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	tip := ui.DailyTips[r.Intn(len(ui.DailyTips))]
+
+	staminaBar := fmt.Sprintf("`%s` %d/%d",
+		utils.ProgressBar(cult.Stamina, cult.MaxStamina, 10),
+		cult.Stamina, cult.MaxStamina)
+
+	expBar := fmt.Sprintf("`%s` %s/%s",
+		utils.ProgressBar(int(cult.CultivationExp), int(cult.CultivationExpRequired), 10),
+		utils.FormatNumber(cult.CultivationExp),
+		utils.FormatNumber(cult.CultivationExpRequired))
+
+	return &menu.MainMenuVM{
+		SessionID:    session.SessionID,
+		DaoName:      player.DaoName,
+		RealmDisplay: fmt.Sprintf("%s tầng %d", cult.Realm.DisplayName(), cult.RealmLevel),
+		CombatPower:  utils.FormatNumber(cult.CombatPower),
+		MindState:    cult.MindState.DisplayName(),
+		StaminaBar:   staminaBar,
+		ExpBar:       expBar,
+		SpiritStones: utils.FormatNumber(wallet.SpiritStones),
+		SpiritJades:  utils.FormatNumber(wallet.SpiritJades),
+		FateTickets:  fmt.Sprintf("%d vé", wallet.FateTickets),
+		DailyTip:     tip,
+	}
+}
+
+func toProfileMenuVM(session *menu.Session, player *profile.Player, wallet *economy.Wallet) *menu.ProfileMenuVM {
+	return &menu.ProfileMenuVM{
+		SessionID:    session.SessionID,
+		DaoName:      player.DaoName,
+		DisplayName:  player.DisplayName,
+		JoinedAt:     utils.DiscordTimestamp(player.CreatedAt, "D"),
+		LastActive:   utils.DiscordTimestamp(player.LastActiveAt, "R"),
+		SpiritStones: utils.FormatNumber(wallet.SpiritStones),
+		SpiritJades:  utils.FormatNumber(wallet.SpiritJades),
+		FateTickets:  fmt.Sprintf("%d vé", wallet.FateTickets),
+	}
+}
+
+func toCultivationMenuVM(session *menu.Session, player *profile.Player, cult *cultivation.CultivationProfile) *menu.CultivationMenuVM {
+	pathDisplay := "Chưa chọn đạo lộ"
+	if cult.Path != cultivation.PathNone {
+		pathDisplay = string(cult.Path)
+	}
+
+	staminaBar := fmt.Sprintf("`%s` %d/%d",
+		utils.ProgressBar(cult.Stamina, cult.MaxStamina, 10),
+		cult.Stamina, cult.MaxStamina)
+
+	expBar := fmt.Sprintf("`%s`\n%s / %s tu vi",
+		utils.ProgressBar(int(cult.CultivationExp), int(cult.CultivationExpRequired), 12),
+		utils.FormatNumber(cult.CultivationExp),
+		utils.FormatNumber(cult.CultivationExpRequired))
+
+	return &menu.CultivationMenuVM{
+		SessionID:       session.SessionID,
+		DaoName:         player.DaoName,
+		RealmDisplay:    fmt.Sprintf("%s tầng %d", cult.Realm.DisplayName(), cult.RealmLevel),
+		MindState:       cult.MindState.DisplayName(),
+		PathDisplay:     pathDisplay,
+		StaminaBar:      staminaBar,
+		ExpBar:          expBar,
+		CombatPower:     utils.FormatNumber(cult.CombatPower),
+		CanBreakthrough: cult.CanBreakthrough(),
+	}
 }

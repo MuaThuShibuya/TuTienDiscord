@@ -1,9 +1,9 @@
 // File: internal/discord/router.go
-// Version: v0.1
-// Purpose: Top-level Discord interaction router — dispatches slash commands and component interactions
-//          to the correct handler. This is the single point of entry for all Discord events.
-// Security: Only processes interactions from guilds (no DMs). Unknown commands are ignored gracefully.
-// Notes: Add new command routes here as features grow. Keep this file thin — no business logic.
+// Phiên bản: v0.1.1
+// Mục đích: Router tương tác Discord cấp cao nhất — phân luồng slash command và component interaction
+//           đến đúng handler. Đây là điểm vào duy nhất cho mọi Discord event.
+// Bảo mật: Chỉ xử lý interaction từ guild (bỏ qua DM). Lệnh không xác định được bỏ qua graceful.
+// Ghi chú: Thêm route lệnh mới ở đây khi có tính năng mới. File này chỉ phân luồng, không có logic.
 
 package discord
 
@@ -11,12 +11,12 @@ import (
 	"github.com/bwmarrin/discordgo"
 	"go.uber.org/zap"
 
-	"github.com/yourname/tu-tien-bot/internal/discord/handlers"
-	"github.com/yourname/tu-tien-bot/internal/discord/menu"
-	"github.com/yourname/tu-tien-bot/internal/logger"
+	"github.com/whiskey/tu-tien-bot/internal/discord/handlers"
+	"github.com/whiskey/tu-tien-bot/internal/discord/menu"
+	"github.com/whiskey/tu-tien-bot/internal/logger"
 )
 
-// Router holds all registered handlers and routes interactions to them.
+// Router chứa tất cả handler đã đăng ký và phân luồng interaction đến chúng.
 type Router struct {
 	startHandler *handlers.StartHandler
 	menuHandler  *handlers.MenuHandler
@@ -24,7 +24,7 @@ type Router struct {
 	log          *zap.Logger
 }
 
-// NewRouter creates the top-level interaction router.
+// NewRouter tạo top-level interaction router.
 func NewRouter(
 	startHandler *handlers.StartHandler,
 	menuHandler *handlers.MenuHandler,
@@ -38,12 +38,12 @@ func NewRouter(
 	}
 }
 
-// HandleInteraction is the discordgo event handler registered on the session.
-// It routes each interaction to the correct handler based on type and name.
+// HandleInteraction là discordgo event handler được đăng ký trên session.
+// Phân luồng mỗi interaction đến handler phù hợp dựa trên type và tên.
 func (r *Router) HandleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	// All interactions must come from a guild member
+	// Bỏ qua tất cả interaction không từ guild member (DM)
 	if i.Member == nil {
-		r.log.Debug("Ignoring DM interaction")
+		r.log.Debug("Bỏ qua DM interaction")
 		return
 	}
 
@@ -52,24 +52,24 @@ func (r *Router) HandleInteraction(s *discordgo.Session, i *discordgo.Interactio
 		r.routeCommand(s, i)
 
 	case discordgo.InteractionMessageComponent:
-		// All component interactions go through the menu router
+		// Tất cả component interaction đi qua menu router
 		r.menuRouter.Handle(s, i.Interaction)
 
 	case discordgo.InteractionModalSubmit:
-		// TODO v0.1+: route modal submissions (e.g., dao name rename modal)
-		r.log.Debug("Modal submit received (not yet handled)",
+		// TODO v0.1+: phân luồng modal submit (ví dụ: modal đổi đạo hiệu)
+		r.log.Debug("Nhận modal submit (chưa xử lý)",
 			zap.String("customID", i.ModalSubmitData().CustomID))
 
 	default:
-		r.log.Debug("Unknown interaction type", zap.Int("type", int(i.Type)))
+		r.log.Debug("Loại interaction không xác định", zap.Int("type", int(i.Type)))
 	}
 }
 
-// routeCommand dispatches slash commands to the appropriate handler.
+// routeCommand phân luồng slash command đến handler tương ứng.
 func (r *Router) routeCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	name := i.ApplicationCommandData().Name
 
-	r.log.Debug("Slash command received",
+	r.log.Debug("Nhận slash command",
 		zap.String("command", name),
 		zap.String("userId", i.Member.User.ID),
 		zap.String("guildId", i.GuildID),
@@ -81,6 +81,6 @@ func (r *Router) routeCommand(s *discordgo.Session, i *discordgo.InteractionCrea
 	case "menu":
 		r.menuHandler.Handle(s, i)
 	default:
-		r.log.Warn("Unknown command", zap.String("command", name))
+		r.log.Warn("Lệnh không xác định", zap.String("command", name))
 	}
 }

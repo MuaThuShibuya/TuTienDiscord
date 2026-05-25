@@ -1,8 +1,7 @@
 // File: internal/game/cooldown/model.go
-// Version: v0.1
-// Purpose: Define the Cooldown model for tracking per-user, per-action cooldowns.
-// Security: action name comes from server-side constants, never raw user input.
-// Notes: MongoDB TTL index on expiresAt auto-deletes expired cooldowns. See database/indexes.go.
+// Phiên bản: v0.1.1
+// Mục đích: Struct Cooldown và các hằng Action cho hệ thống cooldown.
+// Ghi chú: MongoDB TTL index trên expiresAt tự động xóa cooldown đã hết hạn.
 
 package cooldown
 
@@ -12,20 +11,20 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
-// Action defines a named cooldown type. Use constants to avoid typos.
+// Action tên hành động được cooldown — luôn là hằng server-side, không nhận từ user.
 type Action string
 
 const (
-	ActionCultivate  Action = "cultivate"   // Tĩnh tu
-	ActionDungeon    Action = "dungeon"      // Phó bản
-	ActionDaily      Action = "daily"        // Điểm danh hàng ngày
-	ActionGacha      Action = "gacha"        // Quay cơ duyên — rate limited
-	ActionPvP        Action = "pvp"          // PvP
-	ActionBoss       Action = "boss"         // Boss server
-	// TODO v0.2+: add more actions as systems are built
+	ActionCultivate Action = "cultivate" // Tĩnh tu
+	ActionDungeon   Action = "dungeon"   // Phó bản
+	ActionDaily     Action = "daily"     // Điểm danh hàng ngày
+	ActionGacha     Action = "gacha"     // Quay cơ duyên
+	ActionPvP       Action = "pvp"       // PvP
+	ActionBoss      Action = "boss"      // Boss server
+	// TODO v0.2+: thêm action mới khi xây dựng các hệ thống tương ứng
 )
 
-// Cooldown is one record per (userId, guildId, action) triple.
+// Cooldown một bản ghi cooldown per (userId, guildId, action).
 type Cooldown struct {
 	ID        primitive.ObjectID `bson:"_id,omitempty" json:"id"`
 	UserID    string             `bson:"userId"        json:"userId"`
@@ -35,16 +34,16 @@ type Cooldown struct {
 	CreatedAt time.Time          `bson:"createdAt"     json:"createdAt"`
 }
 
-// IsExpired returns true if the cooldown has passed.
+// IsExpired trả về true nếu cooldown đã hết hạn.
 func (c *Cooldown) IsExpired() bool {
 	return time.Now().UTC().After(c.ExpiresAt)
 }
 
-// RemainingDuration returns how long until the cooldown expires.
-func (c *Cooldown) RemainingDuration() time.Duration {
-	remaining := time.Until(c.ExpiresAt)
-	if remaining < 0 {
+// Remaining trả về thời gian còn lại của cooldown. 0 nếu đã hết.
+func (c *Cooldown) Remaining() time.Duration {
+	r := time.Until(c.ExpiresAt)
+	if r < 0 {
 		return 0
 	}
-	return remaining
+	return r
 }

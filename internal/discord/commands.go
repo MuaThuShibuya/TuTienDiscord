@@ -1,14 +1,14 @@
 // File: internal/discord/commands.go
-// Version: v0.1
-// Purpose: Define all Discord slash command schemas registered with the Discord API.
-// Security: Commands are registered server-side; descriptions must not reveal internal details.
-// Notes: Add new commands here as new features are built. Re-register on every bot start.
+// Phiên bản: v0.1.1
+// Mục đích: Định nghĩa schema tất cả slash command đăng ký với Discord API.
+// Bảo mật: Mô tả lệnh không được tiết lộ chi tiết kỹ thuật nội bộ.
+// Ghi chú: Thêm lệnh mới ở đây khi xây dựng tính năng. Bot tự đăng ký lại mỗi lần khởi động.
 
 package discord
 
 import "github.com/bwmarrin/discordgo"
 
-// AllCommands returns all slash command definitions to register with Discord.
+// AllCommands trả về danh sách tất cả slash command cần đăng ký với Discord.
 func AllCommands() []*discordgo.ApplicationCommand {
 	return []*discordgo.ApplicationCommand{
 		{
@@ -19,8 +19,8 @@ func AllCommands() []*discordgo.ApplicationCommand {
 			Name:        "menu",
 			Description: "Mở giao diện chính của Vạn Pháp Tiên Nghịch.",
 		},
-		// TODO v0.2: /cultivate — shortcut to tĩnh tu without opening full menu
-		// TODO v0.5: /gacha  — shortcut to gacha
-		// TODO v0.8: /market — shortcut to market
+		// TODO v0.2: /cultivate — tĩnh tu nhanh không cần mở menu
+		// TODO v0.5: /gacha    — quay cơ duyên nhanh
+		// TODO v0.8: /market   — truy cập chợ nhanh
 	}
 }

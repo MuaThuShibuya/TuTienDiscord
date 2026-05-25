@@ -1,9 +1,9 @@
 // File: internal/scheduler/cleanup_sessions.go
-// Version: v0.1
-// Purpose: Periodic cleanup of expired menu sessions not yet removed by MongoDB TTL.
-// Security: Only deletes sessions past their expiresAt. No user data is permanently lost.
-// Notes: MongoDB TTL index handles most cleanup automatically. This is a belt-and-suspenders
-//        fallback that runs every hour. Can be removed if TTL index proves sufficient.
+// Phiên bản: v0.1.1
+// Mục đích: Dọn dẹp định kỳ phiên menu đã hết hạn chưa được MongoDB TTL xóa tự động.
+// Bảo mật: Chỉ xóa phiên đã qua expiresAt. Không có dữ liệu người chơi nào bị mất vĩnh viễn.
+// Ghi chú: MongoDB TTL index xử lý phần lớn việc dọn dẹp tự động. Scheduler này là lớp dự phòng
+//          chạy mỗi giờ. Có thể bỏ nếu TTL index hoạt động ổn định.
 
 package scheduler
 
@@ -15,7 +15,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.uber.org/zap"
 
-	"github.com/yourname/tu-tien-bot/internal/logger"
+	"github.com/whiskey/tu-tien-bot/internal/logger"
 )
 
 const (
@@ -23,14 +23,14 @@ const (
 	sessionCleanupTimeout  = 30 * time.Second
 )
 
-// SessionCleaner removes expired menu_sessions documents on a schedule.
+// SessionCleaner xóa các document menu_sessions đã hết hạn theo lịch.
 type SessionCleaner struct {
 	col  *mongo.Collection
 	log  *zap.Logger
 	stop chan struct{}
 }
 
-// NewSessionCleaner creates a session cleaner for the given MongoDB collection.
+// NewSessionCleaner tạo session cleaner cho MongoDB collection cho trước.
 func NewSessionCleaner(db *mongo.Database) *SessionCleaner {
 	return &SessionCleaner{
 		col:  db.Collection("menu_sessions"),
@@ -39,13 +39,13 @@ func NewSessionCleaner(db *mongo.Database) *SessionCleaner {
 	}
 }
 
-// Start begins the cleanup loop in a background goroutine. Non-blocking.
+// Start bắt đầu vòng lặp dọn dẹp trong goroutine. Không blocking.
 func (sc *SessionCleaner) Start() {
-	sc.log.Info("Session cleaner started", zap.Duration("interval", sessionCleanupInterval))
+	sc.log.Info("Session cleaner đã bật", zap.Duration("interval", sessionCleanupInterval))
 	go sc.run()
 }
 
-// Stop signals the cleanup loop to exit.
+// Stop phát tín hiệu dừng vòng lặp dọn dẹp.
 func (sc *SessionCleaner) Stop() {
 	close(sc.stop)
 }
@@ -59,7 +59,7 @@ func (sc *SessionCleaner) run() {
 		case <-ticker.C:
 			sc.cleanExpired()
 		case <-sc.stop:
-			sc.log.Info("Session cleaner stopped")
+			sc.log.Info("Session cleaner đã dừng")
 			return
 		}
 	}
@@ -72,12 +72,12 @@ func (sc *SessionCleaner) cleanExpired() {
 	filter := bson.M{"expiresAt": bson.M{"$lte": time.Now().UTC()}}
 	result, err := sc.col.DeleteMany(ctx, filter)
 	if err != nil {
-		sc.log.Error("SessionCleaner: failed to delete expired sessions", zap.Error(err))
+		sc.log.Error("SessionCleaner: không xóa được phiên hết hạn", zap.Error(err))
 		return
 	}
 
 	if result.DeletedCount > 0 {
-		sc.log.Info("SessionCleaner: removed expired sessions",
+		sc.log.Info("SessionCleaner: đã xóa phiên hết hạn",
 			zap.Int64("count", result.DeletedCount))
 	}
 }

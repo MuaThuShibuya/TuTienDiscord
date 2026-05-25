@@ -1,7 +1,7 @@
 // File: pkg/utils/time.go
-// Version: v0.1
-// Purpose: Time formatting helpers for Vietnamese display and Discord timestamps.
-// Notes: FormatDuration produces human-readable Vietnamese durations for cooldown display.
+// Phiên bản: v0.1.1
+// Mục đích: Hàm tiện ích định dạng thời gian cho hiển thị tiếng Việt và Discord timestamp.
+// Ghi chú: FormatDuration tạo chuỗi thời gian tiếng Việt dễ đọc để hiển thị cooldown.
 
 package utils
 
@@ -10,8 +10,8 @@ import (
 	"time"
 )
 
-// FormatDuration converts a duration into a human-readable Vietnamese string.
-// Example: 1h30m15s → "1 giờ 30 phút 15 giây"
+// FormatDuration chuyển đổi duration thành chuỗi tiếng Việt dễ đọc.
+// Ví dụ: 1h30m15s → "1 giờ 30 phút"
 func FormatDuration(d time.Duration) string {
 	if d <= 0 {
 		return "0 giây"
@@ -36,19 +36,19 @@ func FormatDuration(d time.Duration) string {
 	}
 }
 
-// DiscordTimestamp returns a Discord-formatted timestamp string.
-// style: "R" = relative ("5 minutes ago"), "F" = full date/time, "d" = short date
+// DiscordTimestamp trả về chuỗi timestamp định dạng Discord.
+// style: "R" = tương đối ("5 phút trước"), "F" = đầy đủ ngày giờ, "D" = ngày ngắn
 func DiscordTimestamp(t time.Time, style string) string {
 	return fmt.Sprintf("<t:%d:%s>", t.Unix(), style)
 }
 
-// StartOfDay returns midnight UTC for the given time.
+// StartOfDay trả về 00:00:00 UTC của ngày cho trước.
 func StartOfDay(t time.Time) time.Time {
 	y, m, d := t.UTC().Date()
 	return time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
 }
 
-// IsSameDay returns true if two times fall on the same UTC calendar day.
+// IsSameDay trả về true nếu hai thời điểm thuộc cùng ngày UTC.
 func IsSameDay(a, b time.Time) bool {
 	ay, am, ad := a.UTC().Date()
 	by, bm, bd := b.UTC().Date()

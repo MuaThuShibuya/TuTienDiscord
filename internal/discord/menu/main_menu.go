@@ -1,113 +1,86 @@
 // File: internal/discord/menu/main_menu.go
-// Version: v0.1
-// Purpose: Render the Main Menu embed and component layout for the Tu Tien RPG bot.
-// Security: Only the session owner can interact. sessionId is embedded in all custom_ids.
-// Notes: Main menu shows player snapshot + category navigation. Edit existing message, don't spam new ones.
+// Phiên bản: v0.1.1
+// Mục đích: UI Builder cho trang Main Menu — render embed tổng quan và select menu điều hướng.
+// Bảo mật: Chỉ nhận ViewModel đã xử lý sẵn, không gọi DB hay service, không có side effect.
+// Ghi chú: Handler map domain models → MainMenuVM trước khi gọi hàm này.
 
 package menu
 
 import (
-	"fmt"
-	"math/rand"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
 
-	"github.com/yourname/tu-tien-bot/internal/discord/ui"
-	cultivation "github.com/yourname/tu-tien-bot/internal/game/cultivation"
-	economy "github.com/yourname/tu-tien-bot/internal/game/economy"
-	profile "github.com/yourname/tu-tien-bot/internal/game/profile"
-	"github.com/yourname/tu-tien-bot/pkg/utils"
+	"github.com/whiskey/tu-tien-bot/internal/discord/ui"
 )
 
-// MainMenuData bundles all data needed to render the main menu.
-type MainMenuData struct {
-	Session     *Session
-	Player      *profile.Player
-	Cultivation *cultivation.CultivationProfile
-	Wallet      *economy.Wallet
-}
-
-// BuildMainMenuResponse constructs the full Discord interaction response for the main menu.
-func BuildMainMenuResponse(data *MainMenuData) *discordgo.InteractionResponseData {
+// BuildMainMenuResponse tạo response Discord đầy đủ cho trang Main Menu.
+func BuildMainMenuResponse(vm *MainMenuVM) *discordgo.InteractionResponseData {
 	return &discordgo.InteractionResponseData{
-		Embeds:     []*discordgo.MessageEmbed{buildMainEmbed(data)},
-		Components: buildMainComponents(data.Session.SessionID),
+		Embeds:     []*discordgo.MessageEmbed{buildMainEmbed(vm)},
+		Components: buildMainComponents(vm.SessionID),
 	}
 }
 
-// BuildMainMenuEdit constructs an edit-message response for navigating back to main.
-func BuildMainMenuEdit(data *MainMenuData) *discordgo.InteractionResponseData {
+// BuildMainMenuEdit tạo response chỉnh sửa message khi điều hướng về Main Menu.
+func BuildMainMenuEdit(vm *MainMenuVM) *discordgo.InteractionResponseData {
 	return &discordgo.InteractionResponseData{
-		Embeds:     []*discordgo.MessageEmbed{buildMainEmbed(data)},
-		Components: buildMainComponents(data.Session.SessionID),
+		Embeds:     []*discordgo.MessageEmbed{buildMainEmbed(vm)},
+		Components: buildMainComponents(vm.SessionID),
 	}
 }
 
-func buildMainEmbed(data *MainMenuData) *discordgo.MessageEmbed {
-	p := data.Player
-	c := data.Cultivation
-	w := data.Wallet
-
-	realmDisplay := fmt.Sprintf("%s tầng %d", c.Realm.DisplayName(), c.RealmLevel)
-	staminaBar := utils.ProgressBar(c.Stamina, c.MaxStamina, 10)
-	expBar := utils.ProgressBar(int(c.CultivationExp), int(c.CultivationExpRequired), 10)
-
-	tip := ui.DailyTips[rand.New(rand.NewSource(time.Now().Unix())).Intn(len(ui.DailyTips))]
-
+func buildMainEmbed(vm *MainMenuVM) *discordgo.MessageEmbed {
 	fields := []*discordgo.MessageEmbedField{
 		{
-			Name: ui.EmojiRealm.String() + " Cảnh Giới",
-			Value: realmDisplay,
+			Name:   ui.EmojiRealm.String() + " Cảnh Giới",
+			Value:  vm.RealmDisplay,
 			Inline: true,
 		},
 		{
-			Name: ui.EmojiCombatPower.String() + " Chiến Lực",
-			Value: utils.FormatNumber(c.CombatPower),
+			Name:   ui.EmojiCombatPower.String() + " Chiến Lực",
+			Value:  vm.CombatPower,
 			Inline: true,
 		},
 		{
-			Name: ui.EmojiMindState.String() + " Tâm Cảnh",
-			Value: c.MindState.DisplayName(),
+			Name:   ui.EmojiMindState.String() + " Tâm Cảnh",
+			Value:  vm.MindState,
 			Inline: true,
 		},
 		{
-			Name: ui.EmojiStamina.String() + " Thể Lực",
-			Value: fmt.Sprintf("`%s` %d/%d", staminaBar, c.Stamina, c.MaxStamina),
+			Name:   ui.EmojiStamina.String() + " Thể Lực",
+			Value:  vm.StaminaBar,
 			Inline: false,
 		},
 		{
-			Name: ui.EmojiCultivate.String() + " Tu Vi",
-			Value: fmt.Sprintf("`%s` %s/%s",
-				expBar,
-				utils.FormatNumber(c.CultivationExp),
-				utils.FormatNumber(c.CultivationExpRequired)),
+			Name:   ui.EmojiCultivate.String() + " Tu Vi",
+			Value:  vm.ExpBar,
 			Inline: false,
 		},
 		{
-			Name: ui.EmojiSpiritStone.String() + " Linh Thạch",
-			Value: utils.FormatNumber(w.SpiritStones),
+			Name:   ui.EmojiSpiritStone.String() + " Linh Thạch",
+			Value:  vm.SpiritStones,
 			Inline: true,
 		},
 		{
-			Name: ui.EmojiSpiritJade.String() + " Linh Ngọc",
-			Value: utils.FormatNumber(w.SpiritJades),
+			Name:   ui.EmojiSpiritJade.String() + " Linh Ngọc",
+			Value:  vm.SpiritJades,
 			Inline: true,
 		},
 		{
-			Name: ui.EmojiFateTicket.String() + " Vé Cơ Duyên",
-			Value: fmt.Sprintf("%d vé", w.FateTickets),
+			Name:   ui.EmojiFateTicket.String() + " Vé Cơ Duyên",
+			Value:  vm.FateTickets,
 			Inline: true,
 		},
 		{
 			Name:  ui.EmojiInfo.String() + " Gợi ý hôm nay",
-			Value: "_" + tip + "_",
+			Value: "_" + vm.DailyTip + "_",
 		},
 	}
 
 	return &discordgo.MessageEmbed{
-		Title:       ui.EmojiProfile.String() + " Vạn Pháp Tiên Nghịch — " + p.DaoName,
-		Description: fmt.Sprintf("Chào mừng trở lại, **%s**!\nHãy chọn chức năng bên dưới.", p.DaoName),
+		Title:       ui.EmojiProfile.String() + " Vạn Pháp Tiên Nghịch — " + vm.DaoName,
+		Description: "Chào mừng trở lại, **" + vm.DaoName + "**!\nHãy chọn chức năng bên dưới.",
 		Color:       ui.ColorDefault,
 		Fields:      fields,
 		Footer: &discordgo.MessageEmbedFooter{
@@ -118,9 +91,9 @@ func buildMainEmbed(data *MainMenuData) *discordgo.MessageEmbed {
 }
 
 func buildMainComponents(sessionID string) []discordgo.MessageComponent {
-	// Row 1: Category select menu
+	// Hàng 1: Select menu danh mục chính
 	categorySelect := ui.SelectMenu(
-		"menu:nav:"+sessionID,
+		Build(DomainMenuSelect, ActionNavSelect, sessionID),
 		"✦ Chọn chức năng...",
 		[]discordgo.SelectMenuOption{
 			ui.SelectOption("Hồ Sơ", string(PageProfile),
@@ -136,9 +109,9 @@ func buildMainComponents(sessionID string) []discordgo.MessageComponent {
 		},
 	)
 
-	// Row 2: Second set of categories
+	// Hàng 2: Select menu danh mục phụ
 	categorySelect2 := ui.SelectMenu(
-		"menu:nav2:"+sessionID,
+		Build(DomainMenuSelect, ActionNav2Select, sessionID),
 		"✦ Chọn thêm...",
 		[]discordgo.SelectMenuOption{
 			ui.SelectOption("Linh Thú / Con Rối", "pets",
@@ -152,7 +125,7 @@ func buildMainComponents(sessionID string) []discordgo.MessageComponent {
 		},
 	)
 
-	// Row 3: Nav buttons
+	// Hàng 3: Nút điều hướng (làm mới / quay lại / đóng) — Main Menu không có trang cha
 	navRow := ui.NavRow(sessionID, string(PageMain), "")
 
 	return []discordgo.MessageComponent{

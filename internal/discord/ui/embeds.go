@@ -1,8 +1,8 @@
 // File: internal/discord/ui/embeds.go
-// Version: v0.1
-// Purpose: Builder functions for standard Discord message embeds used across the bot.
-// Security: Never put raw user input directly into embed fields without sanitization.
-// Notes: All embeds use the color palette from colors.go and emojis from emojis.go.
+// Phiên bản: v0.1.1
+// Mục đích: Các hàm tạo Discord embed chuẩn dùng xuyên suốt bot.
+// Bảo mật: Không nhúng trực tiếp input của user vào embed mà không sanitize.
+// Ghi chú: Hàm gửi/chỉnh response lỗi nằm trong ui/errors.go.
 
 package ui
 
@@ -12,7 +12,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-// ErrorEmbed builds a standard error embed (ephemeral, shown only to the user).
+// ErrorEmbed tạo embed thông báo lỗi màu đỏ.
 func ErrorEmbed(message string) *discordgo.MessageEmbed {
 	return &discordgo.MessageEmbed{
 		Description: EmojiError.String() + " " + message,
@@ -21,7 +21,7 @@ func ErrorEmbed(message string) *discordgo.MessageEmbed {
 	}
 }
 
-// SuccessEmbed builds a standard success embed.
+// SuccessEmbed tạo embed thông báo thành công màu xanh lá.
 func SuccessEmbed(title, message string) *discordgo.MessageEmbed {
 	return &discordgo.MessageEmbed{
 		Title:       EmojiSuccess.String() + " " + title,
@@ -31,7 +31,7 @@ func SuccessEmbed(title, message string) *discordgo.MessageEmbed {
 	}
 }
 
-// InfoEmbed builds a standard informational embed.
+// InfoEmbed tạo embed thông tin màu xanh dương.
 func InfoEmbed(title, message string) *discordgo.MessageEmbed {
 	return &discordgo.MessageEmbed{
 		Title:       EmojiInfo.String() + " " + title,
@@ -41,33 +41,11 @@ func InfoEmbed(title, message string) *discordgo.MessageEmbed {
 	}
 }
 
-// WarningEmbed builds a warning embed.
+// WarningEmbed tạo embed cảnh báo màu vàng.
 func WarningEmbed(message string) *discordgo.MessageEmbed {
 	return &discordgo.MessageEmbed{
 		Description: EmojiWarning.String() + " " + message,
 		Color:       ColorWarning,
 		Timestamp:   time.Now().UTC().Format(time.RFC3339),
 	}
-}
-
-// EphemeralError returns an interaction response with an error embed, visible only to the user.
-func EphemeralError(s *discordgo.Session, i *discordgo.Interaction, message string) {
-	_ = s.InteractionRespond(i, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{
-			Embeds: []*discordgo.MessageEmbed{ErrorEmbed(message)},
-			Flags:  discordgo.MessageFlagsEphemeral,
-		},
-	})
-}
-
-// EphemeralUpdate edits an existing interaction's deferred response with an error embed.
-func EphemeralUpdate(s *discordgo.Session, i *discordgo.Interaction, message string) {
-	_ = s.InteractionRespond(i, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseUpdateMessage,
-		Data: &discordgo.InteractionResponseData{
-			Embeds: []*discordgo.MessageEmbed{ErrorEmbed(message)},
-			Flags:  discordgo.MessageFlagsEphemeral,
-		},
-	})
 }

@@ -1,9 +1,9 @@
 // File: internal/server/http_server.go
-// Version: v0.1
-// Purpose: Lightweight HTTP server for health checks and future REST/admin endpoints.
-// Security: Only exposes /health. No auth on health endpoint (non-sensitive). Future admin
-//           endpoints must require auth before being added.
-// Notes: On VPS/Docker, this can be removed in favor of Docker health checks or systemd.
+// Phiên bản: v0.1.1
+// Mục đích: HTTP server nhẹ cho health check và các endpoint admin/REST trong tương lai.
+// Bảo mật: Hiện chỉ expose /health. Endpoint này không yêu cầu auth (không chứa thông tin nhạy cảm).
+//           Endpoint admin tương lai phải có auth middleware trước khi thêm vào.
+// Ghi chú: Trên VPS/Docker, có thể bỏ server này và dùng Docker health check hoặc systemd thay thế.
 
 package server
 
@@ -14,23 +14,23 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/yourname/tu-tien-bot/internal/config"
-	"github.com/yourname/tu-tien-bot/internal/database"
-	"github.com/yourname/tu-tien-bot/internal/logger"
+	"github.com/whiskey/tu-tien-bot/internal/config"
+	"github.com/whiskey/tu-tien-bot/internal/database"
+	"github.com/whiskey/tu-tien-bot/internal/logger"
 )
 
-// HTTPServer wraps the standard library HTTP server.
+// HTTPServer bọc HTTP server của standard library.
 type HTTPServer struct {
 	server *http.Server
 	log    *zap.Logger
 }
 
-// NewHTTPServer creates and configures the HTTP server with all routes.
+// NewHTTPServer tạo và cấu hình HTTP server với tất cả route.
 func NewHTTPServer(cfg *config.Config, db *database.Client) *HTTPServer {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", HealthHandler(cfg, db))
 
-	// TODO: Add admin/dashboard routes here in a future version (with auth middleware).
+	// TODO: Thêm route admin/dashboard ở đây trong phiên bản tương lai (cần auth middleware).
 
 	srv := &http.Server{
 		Addr:         ":" + cfg.Server.Port,
@@ -46,18 +46,18 @@ func NewHTTPServer(cfg *config.Config, db *database.Client) *HTTPServer {
 	}
 }
 
-// Start begins listening in a goroutine. Non-blocking.
+// Start bắt đầu lắng nghe trong goroutine. Không blocking.
 func (s *HTTPServer) Start() {
 	go func() {
-		s.log.Info("HTTP server listening", zap.String("addr", s.server.Addr))
+		s.log.Info("HTTP server đang lắng nghe", zap.String("addr", s.server.Addr))
 		if err := s.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			s.log.Error("HTTP server error", zap.Error(err))
+			s.log.Error("HTTP server lỗi", zap.Error(err))
 		}
 	}()
 }
 
-// Stop gracefully shuts down the HTTP server.
+// Stop tắt HTTP server graceful.
 func (s *HTTPServer) Stop(ctx context.Context) {
-	s.log.Info("Shutting down HTTP server")
+	s.log.Info("Đang tắt HTTP server")
 	_ = s.server.Shutdown(ctx)
 }

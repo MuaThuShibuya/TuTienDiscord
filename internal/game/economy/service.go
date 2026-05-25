@@ -1,8 +1,8 @@
 // File: internal/game/economy/service.go
-// Version: v0.1
-// Purpose: Business logic for player wallet — get or create, check balance, spend/earn currency.
-// Security: Amount validation happens here before any DB call. No negative input allowed from outside.
-// Notes: All currency operations log the action for future audit trail (v0.8+).
+// Phiên bản: v0.1.1
+// Mục đích: Business logic cho ví tiền — lấy hoặc tạo ví, kiếm/tiêu tài nguyên.
+// Bảo mật: Validate amount > 0 trước mọi thao tác. Không chấp nhận số âm từ caller.
+// Ghi chú: Không gọi Discord API. Không build embed.
 
 package economy
 
@@ -12,33 +12,48 @@ import (
 
 	"go.uber.org/zap"
 
-	apperrors "github.com/yourname/tu-tien-bot/internal/errors"
-	"github.com/yourname/tu-tien-bot/internal/logger"
+	apperrors "github.com/whiskey/tu-tien-bot/internal/apperrors"
+	"github.com/whiskey/tu-tien-bot/internal/logger"
 )
 
-// Service defines wallet business operations.
+// Service định nghĩa nghiệp vụ quản lý ví tiền.
 type Service interface {
+	// GetOrCreate lấy ví hoặc tạo mới với tài nguyên khởi đầu.
 	GetOrCreate(ctx context.Context, userID, guildID string) (*Wallet, error)
+
+	// GetWallet lấy ví, trả về ErrNotFound nếu chưa có.
 	GetWallet(ctx context.Context, userID, guildID string) (*Wallet, error)
+
+	// EarnSpiritStones cộng linh thạch (amount phải > 0).
 	EarnSpiritStones(ctx context.Context, userID, guildID string, amount int64, reason string) (*Wallet, error)
+
+	// SpendSpiritStones trừ linh thạch. Trả về ErrInsufficientFunds nếu không đủ.
 	SpendSpiritStones(ctx context.Context, userID, guildID string, amount int64, reason string) (*Wallet, error)
+
+	// EarnSpiritJades cộng linh ngọc.
 	EarnSpiritJades(ctx context.Context, userID, guildID string, amount int64, reason string) (*Wallet, error)
+
+	// SpendSpiritJades trừ linh ngọc.
 	SpendSpiritJades(ctx context.Context, userID, guildID string, amount int64, reason string) (*Wallet, error)
+
+	// EarnFateTickets cộng vé cơ duyên.
 	EarnFateTickets(ctx context.Context, userID, guildID string, amount int, reason string) (*Wallet, error)
+
+	// SpendFateTickets trừ vé cơ duyên.
 	SpendFateTickets(ctx context.Context, userID, guildID string, amount int, reason string) (*Wallet, error)
 }
 
-type service struct {
+type economyService struct {
 	repo Repository
 	log  *zap.Logger
 }
 
-// NewService creates a new economy service.
+// NewService tạo economy service.
 func NewService(repo Repository) Service {
-	return &service{repo: repo, log: logger.L().Named("economy.service")}
+	return &economyService{repo: repo, log: logger.L().Named("economy.service")}
 }
 
-func (s *service) GetOrCreate(ctx context.Context, userID, guildID string) (*Wallet, error) {
+func (s *economyService) GetOrCreate(ctx context.Context, userID, guildID string) (*Wallet, error) {
 	wallet, err := s.repo.FindByUserID(ctx, userID, guildID)
 	if err == nil {
 		return wallet, nil
@@ -46,109 +61,77 @@ func (s *service) GetOrCreate(ctx context.Context, userID, guildID string) (*Wal
 	if !apperrors.IsNotFound(err) {
 		return nil, err
 	}
-
-	newWallet := DefaultWallet(userID, guildID)
+	newWallet := NewWallet(userID, guildID)
 	if err := s.repo.Upsert(ctx, newWallet); err != nil {
-		s.log.Error("GetOrCreate wallet failed",
-			zap.String("userId", userID),
-			zap.String("guildId", guildID),
-			zap.Error(err),
-		)
+		s.log.Error("GetOrCreate wallet thất bại", zap.String("userId", userID), zap.Error(err))
 		return nil, err
 	}
 	return newWallet, nil
 }
 
-func (s *service) GetWallet(ctx context.Context, userID, guildID string) (*Wallet, error) {
+func (s *economyService) GetWallet(ctx context.Context, userID, guildID string) (*Wallet, error) {
 	return s.repo.FindByUserID(ctx, userID, guildID)
 }
 
-func (s *service) EarnSpiritStones(ctx context.Context, userID, guildID string, amount int64, reason string) (*Wallet, error) {
+func (s *economyService) EarnSpiritStones(ctx context.Context, userID, guildID string, amount int64, reason string) (*Wallet, error) {
 	if amount <= 0 {
-		return nil, apperrors.New("INVALID_AMOUNT", "Số lượng linh thạch phải lớn hơn 0.", nil)
+		return nil, apperrors.New("INVALID_AMOUNT", "Số linh thạch phải lớn hơn 0.", nil)
 	}
-	wallet, err := s.repo.AdjustSpiritStones(ctx, userID, guildID, amount)
+	w, err := s.repo.AdjustSpiritStones(ctx, userID, guildID, amount)
 	if err != nil {
 		return nil, fmt.Errorf("EarnSpiritStones: %w", err)
 	}
-	s.log.Debug("SpiritStones earned",
-		zap.String("userId", userID), zap.Int64("amount", amount), zap.String("reason", reason))
-	return wallet, nil
+	s.log.Debug("Cộng linh thạch", zap.String("userId", userID), zap.Int64("amount", amount), zap.String("lý do", reason))
+	return w, nil
 }
 
-func (s *service) SpendSpiritStones(ctx context.Context, userID, guildID string, amount int64, reason string) (*Wallet, error) {
+func (s *economyService) SpendSpiritStones(ctx context.Context, userID, guildID string, amount int64, reason string) (*Wallet, error) {
 	if amount <= 0 {
-		return nil, apperrors.New("INVALID_AMOUNT", "Số lượng linh thạch phải lớn hơn 0.", nil)
+		return nil, apperrors.New("INVALID_AMOUNT", "Số linh thạch phải lớn hơn 0.", nil)
 	}
-	wallet, err := s.repo.AdjustSpiritStones(ctx, userID, guildID, -amount)
+	w, err := s.repo.AdjustSpiritStones(ctx, userID, guildID, -amount)
 	if err != nil {
 		if apperrors.IsInsufficientFunds(err) {
-			return nil, apperrors.New("INSUFFICIENT_SPIRIT_STONES",
-				"Đạo hữu không đủ linh thạch.", err)
+			return nil, apperrors.New("INSUFFICIENT_SPIRIT_STONES", "Đạo hữu không đủ linh thạch.", err)
 		}
 		return nil, fmt.Errorf("SpendSpiritStones: %w", err)
 	}
-	s.log.Debug("SpiritStones spent",
-		zap.String("userId", userID), zap.Int64("amount", amount), zap.String("reason", reason))
-	return wallet, nil
+	s.log.Debug("Trừ linh thạch", zap.String("userId", userID), zap.Int64("amount", amount), zap.String("lý do", reason))
+	return w, nil
 }
 
-func (s *service) EarnSpiritJades(ctx context.Context, userID, guildID string, amount int64, reason string) (*Wallet, error) {
+func (s *economyService) EarnSpiritJades(ctx context.Context, userID, guildID string, amount int64, reason string) (*Wallet, error) {
 	if amount <= 0 {
-		return nil, apperrors.New("INVALID_AMOUNT", "Số lượng linh ngọc phải lớn hơn 0.", nil)
+		return nil, apperrors.New("INVALID_AMOUNT", "Số linh ngọc phải lớn hơn 0.", nil)
 	}
-	wallet, err := s.repo.AdjustSpiritJades(ctx, userID, guildID, amount)
-	if err != nil {
-		return nil, fmt.Errorf("EarnSpiritJades: %w", err)
-	}
-	s.log.Debug("SpiritJades earned",
-		zap.String("userId", userID), zap.Int64("amount", amount), zap.String("reason", reason))
-	return wallet, nil
+	return s.repo.AdjustSpiritJades(ctx, userID, guildID, amount)
 }
 
-func (s *service) SpendSpiritJades(ctx context.Context, userID, guildID string, amount int64, reason string) (*Wallet, error) {
+func (s *economyService) SpendSpiritJades(ctx context.Context, userID, guildID string, amount int64, reason string) (*Wallet, error) {
 	if amount <= 0 {
-		return nil, apperrors.New("INVALID_AMOUNT", "Số lượng linh ngọc phải lớn hơn 0.", nil)
+		return nil, apperrors.New("INVALID_AMOUNT", "Số linh ngọc phải lớn hơn 0.", nil)
 	}
-	wallet, err := s.repo.AdjustSpiritJades(ctx, userID, guildID, -amount)
-	if err != nil {
-		if apperrors.IsInsufficientFunds(err) {
-			return nil, apperrors.New("INSUFFICIENT_SPIRIT_JADES",
-				"Đạo hữu không đủ linh ngọc.", err)
-		}
-		return nil, fmt.Errorf("SpendSpiritJades: %w", err)
+	w, err := s.repo.AdjustSpiritJades(ctx, userID, guildID, -amount)
+	if err != nil && apperrors.IsInsufficientFunds(err) {
+		return nil, apperrors.New("INSUFFICIENT_SPIRIT_JADES", "Đạo hữu không đủ linh ngọc.", err)
 	}
-	s.log.Debug("SpiritJades spent",
-		zap.String("userId", userID), zap.Int64("amount", amount), zap.String("reason", reason))
-	return wallet, nil
+	return w, err
 }
 
-func (s *service) EarnFateTickets(ctx context.Context, userID, guildID string, amount int, reason string) (*Wallet, error) {
+func (s *economyService) EarnFateTickets(ctx context.Context, userID, guildID string, amount int, reason string) (*Wallet, error) {
 	if amount <= 0 {
-		return nil, apperrors.New("INVALID_AMOUNT", "Số lượng vé cơ duyên phải lớn hơn 0.", nil)
+		return nil, apperrors.New("INVALID_AMOUNT", "Số vé phải lớn hơn 0.", nil)
 	}
-	wallet, err := s.repo.AdjustFateTickets(ctx, userID, guildID, amount)
-	if err != nil {
-		return nil, fmt.Errorf("EarnFateTickets: %w", err)
-	}
-	s.log.Debug("FateTickets earned",
-		zap.String("userId", userID), zap.Int("amount", amount), zap.String("reason", reason))
-	return wallet, nil
+	return s.repo.AdjustFateTickets(ctx, userID, guildID, amount)
 }
 
-func (s *service) SpendFateTickets(ctx context.Context, userID, guildID string, amount int, reason string) (*Wallet, error) {
+func (s *economyService) SpendFateTickets(ctx context.Context, userID, guildID string, amount int, reason string) (*Wallet, error) {
 	if amount <= 0 {
-		return nil, apperrors.New("INVALID_AMOUNT", "Số lượng vé cơ duyên phải lớn hơn 0.", nil)
+		return nil, apperrors.New("INVALID_AMOUNT", "Số vé phải lớn hơn 0.", nil)
 	}
-	wallet, err := s.repo.AdjustFateTickets(ctx, userID, guildID, -amount)
-	if err != nil {
-		if apperrors.IsInsufficientFunds(err) {
-			return nil, apperrors.New("INSUFFICIENT_FATE_TICKETS",
-				"Đạo hữu không đủ vé cơ duyên.", err)
-		}
-		return nil, fmt.Errorf("SpendFateTickets: %w", err)
+	w, err := s.repo.AdjustFateTickets(ctx, userID, guildID, -amount)
+	if err != nil && apperrors.IsInsufficientFunds(err) {
+		return nil, apperrors.New("INSUFFICIENT_FATE_TICKETS", "Đạo hữu không đủ vé cơ duyên.", err)
 	}
-	s.log.Debug("FateTickets spent",
-		zap.String("userId", userID), zap.Int("amount", amount), zap.String("reason", reason))
-	return wallet, nil
+	return w, err
 }
