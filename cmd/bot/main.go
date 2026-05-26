@@ -27,6 +27,7 @@ import (
 	"github.com/whiskey/tu-tien-bot/internal/scheduler"
 	"github.com/whiskey/tu-tien-bot/internal/server"
 
+	alchemypkg "github.com/whiskey/tu-tien-bot/internal/game/alchemy"
 	cooldownpkg "github.com/whiskey/tu-tien-bot/internal/game/cooldown"
 	cultivationpkg "github.com/whiskey/tu-tien-bot/internal/game/cultivation"
 	economypkg "github.com/whiskey/tu-tien-bot/internal/game/economy"
@@ -34,6 +35,8 @@ import (
 	inventorypkg "github.com/whiskey/tu-tien-bot/internal/game/inventory"
 	itempkg "github.com/whiskey/tu-tien-bot/internal/game/item"
 	profilepkg "github.com/whiskey/tu-tien-bot/internal/game/profile"
+
+	_ "github.com/whiskey/tu-tien-bot/internal/game/data/loader"
 )
 
 func main() {
@@ -103,6 +106,7 @@ func main() {
 	itemRepo := itempkg.NewMongoRepository(db.DB())
 	invRepo := inventorypkg.NewMongoRepository(db.DB())
 	equipRepo := equipmentpkg.NewMongoRepository(db.DB())
+	alchemyRepo := alchemypkg.NewMongoRepository(db.DB())
 
 	// --- 5. Services (business logic) ---
 	profileSvc := profilepkg.NewService(profileRepo)
@@ -112,13 +116,14 @@ func main() {
 	inventorySvc := inventorypkg.NewService(invRepo, itemRepo, cultivationSvc)
 	equipSvc := equipmentpkg.NewService(equipRepo, itemRepo)
 	sessionSvc := discordmenu.NewSessionService(sessionRepo)
+	alchemySvc := alchemypkg.NewService(alchemyRepo, inventorySvc)
 
 	// --- 6. Handlers (Controllers) ---
 	startHandler := handlers.NewStartHandler(profileSvc, cultivationSvc, economySvc, inventorySvc)
-	menuHandler := handlers.NewMenuHandler(cfg, profileSvc, cultivationSvc, economySvc, inventorySvc, equipSvc, sessionSvc)
+	menuHandler := handlers.NewMenuHandler(cfg, profileSvc, cultivationSvc, economySvc, inventorySvc, equipSvc, alchemySvc, sessionSvc)
 
 	// --- 7. Menu router ---
-	menuRouter := discordmenu.NewRouter(cfg, sessionSvc, cultivationSvc, inventorySvc, equipSvc, menuHandler.PageLoaders())
+	menuRouter := discordmenu.NewRouter(cfg, sessionSvc, cultivationSvc, inventorySvc, equipSvc, alchemySvc, menuHandler.PageLoaders())
 
 	// --- 8. Discord top-level router ---
 	discordRouter := discord.NewRouter(startHandler, menuHandler, menuRouter)

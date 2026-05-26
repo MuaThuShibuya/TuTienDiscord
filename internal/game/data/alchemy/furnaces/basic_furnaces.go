@@ -1,0 +1,29 @@
+// File: internal/data/alchemy/furnaces/basic_furnaces.go
+package furnaces
+
+import "github.com/whiskey/tu-tien-bot/internal/game/item"
+
+func init() {
+	item.RegisterItems(map[string]item.ItemDefinition{
+		"furnace_thach_lo_d":       {ID: "furnace_thach_lo_d", Name: "Thạch Lô", Type: item.TypeFurnace, Rarity: item.RarityD, Stackable: false, MaxStack: 1, Description: "Lò bằng đá thường.", Stats: map[string]int{"success_bonus": 1}, SellPrice: 50},
+		"furnace_dong_van_d":       {ID: "furnace_dong_van_d", Name: "Đồng Văn Lô", Type: item.TypeFurnace, Rarity: item.RarityD, Stackable: false, MaxStack: 1, Description: "Lò đồng cũ kỹ.", Stats: map[string]int{"success_bonus": 2}, SellPrice: 80},
+		"furnace_thanh_moc_c":      {ID: "furnace_thanh_moc_c", Name: "Thanh Mộc Lô", Type: item.TypeFurnace, Rarity: item.RarityC, Stackable: false, MaxStack: 1, Description: "Lò bằng ngàn năm mộc.", Stats: map[string]int{"success_bonus": 3, "material_save_rate": 1}, SellPrice: 200},
+		"furnace_hac_thiet_c":      {ID: "furnace_hac_thiet_c", Name: "Hắc Thiết Lô", Type: item.TypeFurnace, Rarity: item.RarityC, Stackable: false, MaxStack: 1, Description: "Lò sắt đen khó vỡ.", Stats: map[string]int{"success_bonus": 4}, SellPrice: 250},
+		"furnace_xich_hoa_b":       {ID: "furnace_xich_hoa_b", Name: "Xích Hỏa Lô", Type: item.TypeFurnace, Rarity: item.RarityB, Stackable: false, MaxStack: 1, Description: "Giữ nhiệt cực tốt.", Stats: map[string]int{"success_bonus": 6, "craft_time_reduce": 3}, SellPrice: 600},
+		"furnace_bach_ngoc_b":      {ID: "furnace_bach_ngoc_b", Name: "Bạch Ngọc Lô", Type: item.TypeFurnace, Rarity: item.RarityB, Stackable: false, MaxStack: 1, Description: "Lò ngọc trong suốt.", Stats: map[string]int{"success_bonus": 7, "material_save_rate": 2}, SellPrice: 750},
+		"furnace_tu_van_a":         {ID: "furnace_tu_van_a", Name: "Tử Vân Lô", Type: item.TypeFurnace, Rarity: item.RarityA, Stackable: false, MaxStack: 1, Description: "Luyện đan ra mây tím.", Stats: map[string]int{"success_bonus": 9, "craft_time_reduce": 5}, SellPrice: 2500},
+		"furnace_linh_hoa_a":       {ID: "furnace_linh_hoa_a", Name: "Linh Hỏa Lô", Type: item.TypeFurnace, Rarity: item.RarityA, Stackable: false, MaxStack: 1, Description: "Tự sinh linh hỏa.", Stats: map[string]int{"success_bonus": 10, "material_save_rate": 4}, SellPrice: 3000},
+		"furnace_huyen_am_s":       {ID: "furnace_huyen_am_s", Name: "Huyền Âm Lô", Type: item.TypeFurnace, Rarity: item.RarityS, Stackable: false, MaxStack: 1, Description: "Luyện đan không sợ tẩu hỏa.", Stats: map[string]int{"success_bonus": 13, "fail_refund_rate": 5}, SellPrice: 10000},
+		"furnace_cuu_duong_s":      {ID: "furnace_cuu_duong_s", Name: "Cửu Dương Lô", Type: item.TypeFurnace, Rarity: item.RarityS, Stackable: false, MaxStack: 1, Description: "Hấp thụ tinh hoa mặt trời.", Stats: map[string]int{"success_bonus": 15, "craft_time_reduce": 8}, SellPrice: 12000},
+		"furnace_long_van_s":       {ID: "furnace_long_van_s", Name: "Long Văn Đan Lô", Type: item.TypeFurnace, Rarity: item.RarityS, Stackable: false, MaxStack: 1, Description: "Hình rồng lượn quanh.", Stats: map[string]int{"success_bonus": 16, "rare_output_chance": 2}, SellPrice: 14000},
+		"furnace_phuong_tuc_ss":    {ID: "furnace_phuong_tuc_ss", Name: "Phượng Tức Đan Lô", Type: item.TypeFurnace, Rarity: item.RaritySS, Stackable: false, MaxStack: 1, Description: "Hơi thở của phượng hoàng.", Stats: map[string]int{"success_bonus": 20, "material_save_rate": 8}, SellPrice: 35000},
+		"furnace_tinh_ha_ss":       {ID: "furnace_tinh_ha_ss", Name: "Tinh Hà Lô", Type: item.TypeFurnace, Rarity: item.RaritySS, Stackable: false, MaxStack: 1, Description: "Bên trong là cả vũ trụ.", Stats: map[string]int{"success_bonus": 22, "craft_time_reduce": 12}, SellPrice: 38000},
+		"furnace_van_duoc_ss":      {ID: "furnace_van_duoc_ss", Name: "Vạn Dược Linh Lô", Type: item.TypeFurnace, Rarity: item.RaritySS, Stackable: false, MaxStack: 1, Description: "Luyện chế mọi loại đan.", Stats: map[string]int{"success_bonus": 24, "rare_output_chance": 4}, SellPrice: 40000},
+		"furnace_thien_hoa_sss":    {ID: "furnace_thien_hoa_sss", Name: "Thiên Hỏa Cổ Lô", Type: item.TypeFurnace, Rarity: item.RaritySSS, Stackable: false, MaxStack: 1, Description: "Lò cổ đại từ thiên giới.", Stats: map[string]int{"success_bonus": 28, "material_save_rate": 12}, SellPrice: 120000},
+		"furnace_thai_hu_sss":      {ID: "furnace_thai_hu_sss", Name: "Thái Hư Đan Lô", Type: item.TypeFurnace, Rarity: item.RaritySSS, Stackable: false, MaxStack: 1, Description: "Tồn tại ở cõi vô định.", Stats: map[string]int{"success_bonus": 30, "fail_refund_rate": 12}, SellPrice: 140000},
+		"furnace_hu_khong_sss":     {ID: "furnace_hu_khong_sss", Name: "Hư Không Hóa Đan Lô", Type: item.TypeFurnace, Rarity: item.RaritySSS, Stackable: false, MaxStack: 1, Description: "Biến hư không thành đan.", Stats: map[string]int{"success_bonus": 32, "craft_time_reduce": 18}, SellPrice: 150000},
+		"furnace_cuu_thien_sss":    {ID: "furnace_cuu_thien_sss", Name: "Cửu Thiên Huyền Lô", Type: item.TypeFurnace, Rarity: item.RaritySSS, Stackable: false, MaxStack: 1, Description: "Lò của các vị thần.", Stats: map[string]int{"success_bonus": 35, "rare_output_chance": 8}, SellPrice: 180000},
+		"furnace_luan_hoi_sssp":    {ID: "furnace_luan_hoi_sssp", Name: "Luân Hồi Tạo Hóa Lô", Type: item.TypeFurnace, Rarity: item.RaritySSSP, Stackable: false, MaxStack: 1, Description: "Mở ra tạo hóa luân hồi.", Stats: map[string]int{"success_bonus": 42, "material_save_rate": 20, "rare_output_chance": 12}, SellPrice: 500000},
+		"furnace_nghich_menh_sssp": {ID: "furnace_nghich_menh_sssp", Name: "Nghịch Mệnh Vạn Đạo Lô", Type: item.TypeFurnace, Rarity: item.RaritySSSP, Stackable: false, MaxStack: 1, Description: "Đỉnh lô nghịch lại vạn đạo.", Stats: map[string]int{"success_bonus": 50, "craft_time_reduce": 25, "fail_refund_rate": 20}, SellPrice: 800000},
+	})
+}

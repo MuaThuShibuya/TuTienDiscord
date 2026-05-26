@@ -1,0 +1,134 @@
+package equipment
+
+import (
+	"context"
+	"errors"
+	"testing"
+
+	"github.com/whiskey/tu-tien-bot/internal/game/item"
+)
+
+// --- Mocks ---
+type mockEquipRepo struct {
+	equipped map[EquipmentSlot]string
+}
+
+func (m *mockEquipRepo) Get(ctx context.Context, userID, guildID string) (*EquipmentSet, error) {
+	return nil, nil
+}
+func (m *mockEquipRepo) Equip(ctx context.Context, userID, guildID string, slot EquipmentSlot, instanceID string) error {
+	if m.equipped == nil {
+		m.equipped = make(map[EquipmentSlot]string)
+	}
+	m.equipped[slot] = instanceID
+	return nil
+}
+func (m *mockEquipRepo) Unequip(ctx context.Context, userID, guildID string, slot EquipmentSlot) error {
+	if m.equipped != nil {
+		delete(m.equipped, slot)
+	}
+	return nil
+}
+
+type mockItemRepo struct {
+	validInstance string
+}
+
+func (m *mockItemRepo) CreateInstance(ctx context.Context, inst *item.ItemInstance) error {
+	return nil
+}
+
+func (m *mockItemRepo) GetInstancesByUser(ctx context.Context, userID, guildID string) ([]*item.ItemInstance, error) {
+	return nil, nil
+}
+
+func (m *mockItemRepo) GetInstanceByID(ctx context.Context, instanceID, userID, guildID string) (*item.ItemInstance, error) {
+	switch instanceID {
+	case m.validInstance, "inst_wpn_1":
+		return &item.ItemInstance{InstanceID: instanceID, DefinitionID: "eq_weapon_moc_kiem_d", UserID: userID}, nil
+	case "inst_armor_1":
+		return &item.ItemInstance{InstanceID: instanceID, DefinitionID: "eq_armor_vai_tho_d", UserID: userID}, nil
+	case "inst_pill_1":
+		return &item.ItemInstance{InstanceID: instanceID, DefinitionID: "pill_exp_tu_khi_d", UserID: userID}, nil
+	case "inst_missing_def":
+		return &item.ItemInstance{InstanceID: instanceID, DefinitionID: "", UserID: userID}, nil
+	}
+	return nil, errors.New("ErrNotFound")
+}
+
+func (m *mockItemRepo) AdjustQuantity(ctx context.Context, instanceID, userID, guildID string, amount int64) error {
+	return nil
+}
+
+func (m *mockItemRepo) DeleteInstance(ctx context.Context, instanceID, userID, guildID string) error {
+	return nil
+}
+
+// --- Tests ---
+
+func TestEquipment_EquipSuccess(t *testing.T) {
+	mockItem := &mockItemRepo{validInstance: "inst_wpn_1"}
+	mockEq := &mockEquipRepo{}
+	svc := NewService(mockEq, mockItem)
+
+	err := svc.Equip(context.Background(), "user1", "guild1", "weapon", "inst_wpn_1")
+	if err != nil {
+		t.Fatalf("Không mong đợi lỗi: %v", err)
+	}
+	if mockEq.equipped["weapon"] != "inst_wpn_1" {
+		t.Errorf("Trang bị không được lưu đúng slot")
+	}
+}
+
+func TestEquipment_EquipNotOwned(t *testing.T) {
+	mockItem := &mockItemRepo{validInstance: "inst_wpn_1"}
+	mockEq := &mockEquipRepo{}
+	svc := NewService(mockEq, mockItem)
+
+	// Thử mặc item của người khác (instance ID không tồn tại cho user này)
+	err := svc.Equip(context.Background(), "user1", "guild1", "weapon", "inst_hacker_1")
+	if err == nil {
+		t.Fatal("Mong đợi lỗi khi mặc trang bị không sở hữu")
+	}
+}
+
+func TestEquipment_EquipRejectWrongSlot(t *testing.T) {
+	mockItem := &mockItemRepo{validInstance: "inst_wpn_1"}
+	mockEq := &mockEquipRepo{}
+	svc := NewService(mockEq, mockItem)
+
+	err := svc.Equip(context.Background(), "user1", "guild1", "armor", "inst_wpn_1")
+	if err == nil {
+		t.Fatal("Mong đợi lỗi khi mặc sai vị trí (Vũ khí vào ô Giáp)")
+	}
+}
+
+func TestEquipment_EquipRejectMissingDefinitionID(t *testing.T) {
+	mockItem := &mockItemRepo{}
+	mockEq := &mockEquipRepo{}
+	svc := NewService(mockEq, mockItem)
+
+	err := svc.Equip(context.Background(), "user1", "guild1", "weapon", "inst_missing_def")
+	if err == nil {
+		t.Fatal("Mong đợi lỗi khi thiếu DefinitionID")
+	}
+}
+
+func TestEquipment_EquipRejectNonEquipment(t *testing.T) {
+	mockItem := &mockItemRepo{}
+	mockEq := &mockEquipRepo{}
+	svc := NewService(mockEq, mockItem)
+
+	err := svc.Equip(context.Background(), "user1", "guild1", "weapon", "inst_pill_1")
+	if err == nil {
+		t.Fatal("Mong đợi lỗi khi equip vật phẩm không phải trang bị (Đan dược)")
+	}
+}
+
+func TestEquipment_Enhance_IsTODO(t *testing.T) {
+	svc := NewService(&mockEquipRepo{}, &mockItemRepo{})
+	err := svc.Enhance(context.Background(), "user1", "guild1", "weapon")
+	if err != nil {
+		t.Logf("Enhance hiện tại chưa được implement, lỗi báo về: %v", err)
+	}
+}

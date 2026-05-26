@@ -97,9 +97,9 @@ func TestGetOrCreate_NewProfile(t *testing.T) {
 	if profile.UserID != "user1" {
 		t.Errorf("UserID sai: muốn 'user1', có '%s'", profile.UserID)
 	}
-	// Cảnh giới khởi đầu phải là Luyện Khí
-	if profile.Realm != cultivation.RealmQiRefining {
-		t.Errorf("Realm khởi đầu sai: muốn %s, có %s", cultivation.RealmQiRefining, profile.Realm)
+	// Cảnh giới khởi đầu phải là Phàm Nhân
+	if profile.Realm != cultivation.DefaultRealm {
+		t.Errorf("Realm khởi đầu sai: muốn %s, có %s", cultivation.DefaultRealm, profile.Realm)
 	}
 	if profile.RealmLevel != 1 {
 		t.Errorf("RealmLevel khởi đầu phải là 1, có %d", profile.RealmLevel)

@@ -1,7 +1,6 @@
 // File: internal/discord/menu/navigation.go
-// Phiên bản: v0.1.1
-// Mục đích: Định nghĩa hằng Page, map trang cha-con, và helpers điều hướng menu.
-// Ghi chú: Thêm Page mới ở đây khi xây dựng tính năng theo version roadmap.
+// Chức năng: Định nghĩa hằng Page, map trang cha-con, và helpers điều hướng menu.
+// Ghi chú: Thêm Page mới ở đây khi xây dựng tính năng. parentPage dùng bởi nút Quay Lại.
 
 package menu
 
@@ -9,22 +8,28 @@ package menu
 type Page string
 
 const (
-	PageMain        Page = "main"        // Trang chủ — Main Menu
+	PageMain        Page = "main"        // Trang chủ
 	PageProfile     Page = "profile"     // Hồ sơ người chơi
 	PageCultivation Page = "cultivation" // Tu luyện
-	PageInventory   Page = "inventory"   // Túi đồ / Trang bị — TODO v0.3
+	PageInventory   Page = "inventory"   // Túi đồ
+	PageEquipment   Page = "equipment"   // Trang bị (v0.3)
+	PageAlchemy     Page = "alchemy"     // Luyện đan — TODO v0.4
+	PageCombat      Page = "combat"      // Chiến đấu / PvP — TODO v0.5
 	PageSkills      Page = "skills"      // Kỹ năng / Công pháp — TODO v0.4
-	PagePets        Page = "pets"        // Linh thú / Con rối — TODO v0.6
+	PagePets        Page = "pets"        // Linh thú — TODO v0.6
 	PageGacha       Page = "gacha"       // Cơ duyên / Gacha — TODO v0.5
 	PageMarket      Page = "market"      // Chợ / Đấu giá — TODO v0.8
-	PageSect        Page = "sect"        // Tông môn / NPC / Đạo lữ — TODO v1.0
+	PageSect        Page = "sect"        // Tông môn — TODO v1.0
 )
 
-// parentPage map trang hiện tại → trang cha (để nút Quay lại hoạt động đúng).
+// parentPage ánh xạ trang hiện tại → trang cha (để nút Quay Lại hoạt động đúng).
 var parentPage = map[Page]Page{
 	PageProfile:     PageMain,
 	PageCultivation: PageMain,
 	PageInventory:   PageMain,
+	PageEquipment:   PageMain,
+	PageAlchemy:     PageMain,
+	PageCombat:      PageMain,
 	PageSkills:      PageMain,
 	PagePets:        PageMain,
 	PageGacha:       PageMain,
@@ -33,21 +38,18 @@ var parentPage = map[Page]Page{
 }
 
 // ParentOf trả về trang cha của trang đã cho.
-// Nếu không có trang cha (ví dụ: PageMain), trả về chuỗi rỗng.
 func ParentOf(page Page) string {
 	if parent, ok := parentPage[page]; ok {
 		return string(parent)
 	}
-	return "" // Không có trang cha — nút Quay lại bị disable
+	return ""
 }
 
 // IsValidPage kiểm tra xem page có phải là trang hợp lệ không.
 func IsValidPage(page Page) bool {
-	switch page {
-	case PageMain, PageProfile, PageCultivation,
-		PageInventory, PageSkills, PagePets,
-		PageGacha, PageMarket, PageSect:
+	if page == PageMain {
 		return true
 	}
-	return false
+	_, ok := parentPage[page]
+	return ok
 }

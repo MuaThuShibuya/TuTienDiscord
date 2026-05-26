@@ -1,8 +1,7 @@
 // File: internal/discord/menu/session_model.go
-// Phiên bản: v0.1.1
-// Mục đích: Định nghĩa struct Session — phiên menu của người chơi.
+// Chức năng: Định nghĩa struct Session — phiên menu của người chơi.
 // Bảo mật: SessionID được tạo bằng crypto/rand để không thể đoán được.
-//           Mọi interaction phải xác thực OwnedBy() trước khi xử lý.
+//          OwnedBy() phải được gọi trước mọi thao tác button/select.
 // Ghi chú: MongoDB TTL index trên expiresAt tự động xóa session hết hạn.
 
 package menu
@@ -13,16 +12,16 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
-// Session một phiên menu đang hoạt động của người chơi.
+// Session là một phiên menu đang hoạt động của người chơi.
 type Session struct {
 	ID              primitive.ObjectID `bson:"_id,omitempty"   json:"id"`
-	SessionID       string             `bson:"sessionId"       json:"sessionId"` // ID ngẫu nhiên mạnh — nhúng vào custom_id
+	SessionID       string             `bson:"sessionId"       json:"sessionId"`
 	UserID          string             `bson:"userId"          json:"userId"`
 	GuildID         string             `bson:"guildId"         json:"guildId"`
 	ChannelID       string             `bson:"channelId"       json:"channelId"`
-	MessageID       string             `bson:"messageId"       json:"messageId"` // Discord message ID để edit lại
+	MessageID       string             `bson:"messageId"       json:"messageId"`
 	CurrentPage     Page               `bson:"currentPage"     json:"currentPage"`
-	CurrentCategory string             `bson:"currentCategory" json:"currentCategory"` // Sub-navigation trong trang
+	CurrentCategory string             `bson:"currentCategory" json:"currentCategory"`
 	ExpiresAt       time.Time          `bson:"expiresAt"       json:"expiresAt"`
 	CreatedAt       time.Time          `bson:"createdAt"       json:"createdAt"`
 	UpdatedAt       time.Time          `bson:"updatedAt"       json:"updatedAt"`

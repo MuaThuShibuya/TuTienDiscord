@@ -23,6 +23,7 @@ const (
 	DomainCultivation = "cultivation" // Tu luyện
 	DomainInventory   = "inventory"   // Túi đồ
 	DomainEquipment   = "equipment"   // Trang bị
+	DomainAlchemy     = "alchemy"     // Lò luyện đan
 	// TODO v0.3+: thêm domain khi xây dựng tính năng mới
 )
 
@@ -50,10 +51,16 @@ const (
 	// Inventory
 	ActionInventoryUse       = "use"       // Dùng vật phẩm
 	ActionInventoryDismantle = "dismantle" // Phân giải
+	ActionInventoryPage      = "page"      // Phân trang
 
 	// Equipment
 	ActionEquipmentEquip   = "equip"   // Mặc trang bị
 	ActionEquipmentUnequip = "unequip" // Tháo trang bị
+
+	// Alchemy
+	ActionAlchemyCraft  = "craft"  // Luyện đan
+	ActionAlchemyView   = "view"   // Xem chi tiết đan dược
+	ActionAlchemyCancel = "cancel" // Hủy thao tác xem, quay lại
 )
 
 // ParsedID kết quả phân tích custom_id.

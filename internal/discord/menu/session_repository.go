@@ -1,8 +1,5 @@
 // File: internal/discord/menu/session_repository.go
-// Phiên bản: v0.1.1
-// Mục đích: Interface Repository và MongoDB implementation cho menu Session.
-//           Lưu trữ, tìm kiếm, cập nhật phiên menu người chơi.
-// Bảo mật: FindBySessionID + OwnedBy phải được gọi trước mọi thao tác button.
+// Chức năng: Interface SessionRepository và MongoDB implementation.
 // Ghi chú: MongoDB TTL index trên expiresAt tự xóa session hết hạn.
 
 package menu
@@ -13,11 +10,12 @@ import (
 	"fmt"
 	"time"
 
-	apperrors "github.com/whiskey/tu-tien-bot/internal/apperrors"
-	"github.com/whiskey/tu-tien-bot/pkg/utils"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
+
+	apperrors "github.com/whiskey/tu-tien-bot/internal/apperrors"
+	"github.com/whiskey/tu-tien-bot/pkg/utils"
 )
 
 const sessionCollection = "menu_sessions"
@@ -33,7 +31,6 @@ type SessionRepository interface {
 	DeleteExpiredByUser(ctx context.Context, userID, guildID string) error
 }
 
-// mongoSessionRepo là MongoDB implementation của SessionRepository.
 type mongoSessionRepo struct {
 	col *mongo.Collection
 }

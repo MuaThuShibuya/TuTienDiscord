@@ -1,0 +1,29 @@
+// File: internal/data/equipment/artifacts/linh_khi.go
+package artifacts
+
+import "github.com/whiskey/tu-tien-bot/internal/game/item"
+
+func init() {
+	item.RegisterItems(map[string]item.ItemDefinition{
+		"eq_artifact_linh_chau_d":      {ID: "eq_artifact_linh_chau_d", Name: "Linh Châu Nhỏ", Type: item.TypeEquipment, Rarity: item.RarityD, Stackable: false, MaxStack: 1, Description: "Giúp ngưng tụ linh khí.", Stats: map[string]int{"cultivation_power": 20}, SellPrice: 20},
+		"eq_artifact_thanh_tam_d":      {ID: "eq_artifact_thanh_tam_d", Name: "Thanh Tâm Ngọc", Type: item.TypeEquipment, Rarity: item.RarityD, Stackable: false, MaxStack: 1, Description: "Làm dịu tâm trí.", Stats: map[string]int{"breakthrough_chance": 1}, SellPrice: 35},
+		"eq_artifact_tu_linh_c":        {ID: "eq_artifact_tu_linh_c", Name: "Tụ Linh Bội", Type: item.TypeEquipment, Rarity: item.RarityC, Stackable: false, MaxStack: 1, Description: "Bội ngọc hút linh khí.", Stats: map[string]int{"cultivation_power": 50}, SellPrice: 120},
+		"eq_artifact_ho_mach_c":        {ID: "eq_artifact_ho_mach_c", Name: "Hộ Mạch Châu", Type: item.TypeEquipment, Rarity: item.RarityC, Stackable: false, MaxStack: 1, Description: "Bảo vệ kinh mạch.", Stats: map[string]int{"breakthrough_fail_reduce": 1}, SellPrice: 160},
+		"eq_artifact_huyen_linh_b":     {ID: "eq_artifact_huyen_linh_b", Name: "Huyền Linh Ấn", Type: item.TypeEquipment, Rarity: item.RarityB, Stackable: false, MaxStack: 1, Description: "Khối ấn thần bí.", Stats: map[string]int{"attack": 35, "defense": 20}, SellPrice: 450},
+		"eq_artifact_bach_ngoc_b":      {ID: "eq_artifact_bach_ngoc_b", Name: "Bạch Ngọc Linh Bội", Type: item.TypeEquipment, Rarity: item.RarityB, Stackable: false, MaxStack: 1, Description: "Ngọc bội trắng muốt.", Stats: map[string]int{"cultivation_power": 100}, SellPrice: 500},
+		"eq_artifact_tu_khi_b":         {ID: "eq_artifact_tu_khi_b", Name: "Tử Khí Linh Châu", Type: item.TypeEquipment, Rarity: item.RarityB, Stackable: false, MaxStack: 1, Description: "Hấp thụ tử khí đông lai.", Stats: map[string]int{"exp_bonus": 3}, SellPrice: 650},
+		"eq_artifact_han_nguyet_a":     {ID: "eq_artifact_han_nguyet_a", Name: "Hàn Nguyệt Ngọc", Type: item.TypeEquipment, Rarity: item.RarityA, Stackable: false, MaxStack: 1, Description: "Mát lạnh như trăng thu.", Stats: map[string]int{"stamina_max": 20, "cultivation_power": 180}, SellPrice: 1800},
+		"eq_artifact_xich_duong_a":     {ID: "eq_artifact_xich_duong_a", Name: "Xích Dương Linh Ấn", Type: item.TypeEquipment, Rarity: item.RarityA, Stackable: false, MaxStack: 1, Description: "Đỏ rực dương khí.", Stats: map[string]int{"attack": 80, "crit_rate": 2}, SellPrice: 2200},
+		"eq_artifact_thanh_lien_a":     {ID: "eq_artifact_thanh_lien_a", Name: "Thanh Liên Hộ Tâm Bội", Type: item.TypeEquipment, Rarity: item.RarityA, Stackable: false, MaxStack: 1, Description: "Làm từ sen xanh.", Stats: map[string]int{"defense": 80, "hp": 300}, SellPrice: 2400},
+		"eq_artifact_cuu_loi_s":        {ID: "eq_artifact_cuu_loi_s", Name: "Cửu Lôi Linh Châu", Type: item.TypeEquipment, Rarity: item.RarityS, Stackable: false, MaxStack: 1, Description: "Ngưng tụ chín vạn lôi điện.", Stats: map[string]int{"attack": 150, "crit_damage": 10}, SellPrice: 8000},
+		"eq_artifact_huyen_am_s":       {ID: "eq_artifact_huyen_am_s", Name: "Huyền Âm Hộ Mệnh Ấn", Type: item.TypeEquipment, Rarity: item.RarityS, Stackable: false, MaxStack: 1, Description: "Bảo hộ chân hồn.", Stats: map[string]int{"defense": 160, "damage_reduce": 3}, SellPrice: 8500},
+		"eq_artifact_van_khi_s":        {ID: "eq_artifact_van_khi_s", Name: "Vạn Khí Tụ Linh Bội", Type: item.TypeEquipment, Rarity: item.RarityS, Stackable: false, MaxStack: 1, Description: "Hút cạn linh khí thế gian.", Stats: map[string]int{"exp_bonus": 8, "cultivation_power": 350}, SellPrice: 9500},
+		"eq_artifact_phuong_hoa_ss":    {ID: "eq_artifact_phuong_hoa_ss", Name: "Phượng Hỏa Linh Châu", Type: item.TypeEquipment, Rarity: item.RaritySS, Stackable: false, MaxStack: 1, Description: "Kết tinh từ tinh huyết phượng hoàng.", Stats: map[string]int{"attack": 260, "crit_rate": 5}, SellPrice: 25000},
+		"eq_artifact_long_huyet_ss":    {ID: "eq_artifact_long_huyet_ss", Name: "Long Huyết Hộ Tâm Bội", Type: item.TypeEquipment, Rarity: item.RaritySS, Stackable: false, MaxStack: 1, Description: "Giọt máu chân long.", Stats: map[string]int{"hp": 1500, "defense": 240}, SellPrice: 27000},
+		"eq_artifact_tinh_ha_ss":       {ID: "eq_artifact_tinh_ha_ss", Name: "Tinh Hà Tụ Đạo Ấn", Type: item.TypeEquipment, Rarity: item.RaritySS, Stackable: false, MaxStack: 1, Description: "Dấu ấn của cả dải ngân hà.", Stats: map[string]int{"cultivation_power": 800, "breakthrough_chance": 4}, SellPrice: 30000},
+		"eq_artifact_hu_khong_sss":     {ID: "eq_artifact_hu_khong_sss", Name: "Hư Không Linh Châu", Type: item.TypeEquipment, Rarity: item.RaritySSS, Stackable: false, MaxStack: 1, Description: "Viên châu không tồn tại ở hiện tại.", Stats: map[string]int{"speed": 180, "dodge_rate": 8}, SellPrice: 90000},
+		"eq_artifact_thien_kiep_sss":   {ID: "eq_artifact_thien_kiep_sss", Name: "Thiên Kiếp Hộ Đạo Ấn", Type: item.TypeEquipment, Rarity: item.RaritySSS, Stackable: false, MaxStack: 1, Description: "Mở đường qua lôi kiếp.", Stats: map[string]int{"breakthrough_chance": 8, "fail_reduce": 8}, SellPrice: 95000},
+		"eq_artifact_luan_hoi_sssp":    {ID: "eq_artifact_luan_hoi_sssp", Name: "Luân Hồi Linh Bội", Type: item.TypeEquipment, Rarity: item.RaritySSSP, Stackable: false, MaxStack: 1, Description: "Mang mảnh ký ức vạn kiếp.", Stats: map[string]int{"exp_bonus": 20, "cultivation_power": 2000}, SellPrice: 350000},
+		"eq_artifact_nghich_menh_sssp": {ID: "eq_artifact_nghich_menh_sssp", Name: "Nghịch Mệnh Đạo Ấn", Type: item.TypeEquipment, Rarity: item.RaritySSSP, Stackable: false, MaxStack: 1, Description: "Che giấu tu vi khỏi thiên đạo.", Stats: map[string]int{"all_stats": 12, "breakthrough_chance": 12}, SellPrice: 500000},
+	})
+}

@@ -1,12 +1,15 @@
 // File: internal/discord/ui/components.go
-// Version: v0.1
-// Purpose: Builder functions for Discord UI components — buttons, select menus, action rows.
-// Security: custom_id values must encode sessionId to allow ownership validation in handlers.
-// Notes: custom_id format: "<action>:<sessionId>[:<extra>]" — parsed in menu router.
+// Chức năng: Builder functions cho Discord UI components — button, select menu, action row.
+// Ghi chú: Mọi emoji truyền vào phải là *emoji.Emoji từ package ui/emoji — không định nghĩa emoji ở đây.
+//          customID phải encode sessionID để handler xác thực quyền sở hữu.
 
 package ui
 
-import "github.com/bwmarrin/discordgo"
+import (
+	"github.com/bwmarrin/discordgo"
+
+	"github.com/whiskey/tu-tien-bot/internal/discord/ui/emoji"
+)
 
 // ButtonStyle aliases for readability.
 const (
@@ -23,34 +26,29 @@ func ActionRow(components ...discordgo.MessageComponent) discordgo.ActionsRow {
 }
 
 // Button builds a standard button component.
-// customID format: "action:sessionId" or "action:sessionId:extra"
-func Button(label, customID string, style discordgo.ButtonStyle, emoji *Emoji, disabled bool) discordgo.Button {
+// em có thể nil nếu không cần icon.
+func Button(label, customID string, style discordgo.ButtonStyle, em *emoji.Emoji, disabled bool) discordgo.Button {
 	btn := discordgo.Button{
 		Label:    label,
 		Style:    style,
 		CustomID: customID,
 		Disabled: disabled,
 	}
-	if emoji != nil {
-		btn.Emoji = &discordgo.ComponentEmoji{
-			Name:     emoji.Name,
-			ID:       emoji.ID,
-			Animated: emoji.Animated,
-		}
+	if em != nil {
+		btn.Emoji = em.Component()
 	}
 	return btn
 }
 
-// NavRow builds the standard 3-button navigation row (Làm mới / Quay lại / Đóng).
+// NavRow builds the standard navigation row (Quay lại / Đóng).
+// parentPage trống → nút Quay lại bị disabled.
 func NavRow(sessionID, currentPage, parentPage string) discordgo.ActionsRow {
-	refreshID := "nav:refresh:" + sessionID + ":" + currentPage
 	backID := "nav:back:" + sessionID + ":" + parentPage
 	closeID := "nav:close:" + sessionID
 
 	return ActionRow(
-		Button("Làm mới", refreshID, BtnSecondary, &EmojiRefresh, false),
-		Button("Quay lại", backID, BtnSecondary, &EmojiBack, parentPage == ""),
-		Button("Đóng", closeID, BtnDanger, &EmojiClose, false),
+		Button("Quay lại", backID, BtnSecondary, emoji.Back, parentPage == ""),
+		Button("Đóng", closeID, BtnDanger, emoji.Close, false),
 	)
 }
 
@@ -64,19 +62,16 @@ func SelectMenu(customID, placeholder string, options []discordgo.SelectMenuOpti
 }
 
 // SelectOption builds a select menu option with an optional emoji.
-func SelectOption(label, value, description string, emoji *Emoji, isDefault bool) discordgo.SelectMenuOption {
+// em có thể nil nếu không cần icon.
+func SelectOption(label, value, description string, em *emoji.Emoji, isDefault bool) discordgo.SelectMenuOption {
 	opt := discordgo.SelectMenuOption{
 		Label:       label,
 		Value:       value,
 		Description: description,
 		Default:     isDefault,
 	}
-	if emoji != nil {
-		opt.Emoji = &discordgo.ComponentEmoji{
-			Name:     emoji.Name,
-			ID:       emoji.ID,
-			Animated: emoji.Animated,
-		}
+	if em != nil {
+		opt.Emoji = em.Component()
 	}
 	return opt
 }

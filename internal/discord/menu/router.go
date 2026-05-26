@@ -1,11 +1,10 @@
 // File: internal/discord/menu/router.go
-// Phiên bản: v0.1.1
-// Mục đích: Phân luồng tương tác button/select-menu bên trong hệ thống menu game.
-//           Phân tích custom_id, xác thực chủ phiên, điều hướng đến page renderer tương ứng.
-// Bảo mật: Mọi tương tác đều xác thực sessionId + userId trước khi thay đổi trạng thái hoặc ghi DB.
-//           Người bấm menu của người khác nhận thông báo ephemeral riêng.
+// Chức năng: Phân luồng tương tác component (button/select-menu) đến handler đúng.
+//            Xác thực session, điều hướng trang, xử lý hành động tu luyện/túi đồ/trang bị.
+// Bảo mật: Mọi tương tác đều được ACK ngay (defer) để tránh timeout 3 giây Discord.
+//          Sau khi defer, dùng InteractionResponseEdit và FollowupMessageCreate cho response.
+//          ValidateOwner xác thực chủ sở hữu phiên trước khi xử lý bất kỳ hành động nào.
 // Ghi chú: Format custom_id: "<domain>:<action>:<sessionId>[:<extra>]"
-//          Ví dụ: "menu:nav:abc123" hoặc "nav:back:abc123:main"
 
 package menu
 
@@ -14,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"strings"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
@@ -22,6 +22,7 @@ import (
 	apperrors "github.com/whiskey/tu-tien-bot/internal/apperrors"
 	"github.com/whiskey/tu-tien-bot/internal/config"
 	"github.com/whiskey/tu-tien-bot/internal/discord/ui"
+	"github.com/whiskey/tu-tien-bot/internal/game/alchemy"
 	"github.com/whiskey/tu-tien-bot/internal/game/cultivation"
 	"github.com/whiskey/tu-tien-bot/internal/game/equipment"
 	"github.com/whiskey/tu-tien-bot/internal/game/inventory"
@@ -31,33 +32,42 @@ import (
 // PageLoader là hàm tải toàn bộ dữ liệu cho một trang và trả về response data.
 type PageLoader func(ctx context.Context, session *Session) (*discordgo.InteractionResponseData, error)
 
-// Router xử lý mọi tương tác component (button / select menu) bên trong hệ thống menu.
+// Router xử lý mọi tương tác component bên trong hệ thống menu.
 type Router struct {
 	cfg            *config.Config
 	sessionSvc     SessionService
 	cultivationSvc cultivation.Service
 	inventorySvc   inventory.Service
 	equipSvc       equipment.Service
+	alchemySvc     alchemy.Service
 	pageLoaders    map[Page]PageLoader
 	log            *zap.Logger
 }
 
 // NewRouter tạo menu interaction router.
-// pageLoaders ánh xạ mỗi Page sang hàm tải dữ liệu và render trang đó.
-func NewRouter(cfg *config.Config, sessionSvc SessionService, cultSvc cultivation.Service, invSvc inventory.Service, equipSvc equipment.Service, loaders map[Page]PageLoader) *Router {
+func NewRouter(
+	cfg *config.Config,
+	sessionSvc SessionService,
+	cultSvc cultivation.Service,
+	invSvc inventory.Service,
+	equipSvc equipment.Service,
+	alchemySvc alchemy.Service,
+	loaders map[Page]PageLoader,
+) *Router {
 	return &Router{
 		cfg:            cfg,
 		sessionSvc:     sessionSvc,
 		cultivationSvc: cultSvc,
 		inventorySvc:   invSvc,
 		equipSvc:       equipSvc,
+		alchemySvc:     alchemySvc,
 		pageLoaders:    loaders,
 		log:            logger.L().Named("menu.router"),
 	}
 }
 
 // Handle phân luồng một Discord component interaction đến handler phù hợp.
-// Được gọi bởi discord router cấp cao nhất cho mọi MessageComponent interaction.
+// Luôn defer trước để tránh timeout 3 giây, sau đó xử lý và edit response.
 func (r *Router) Handle(s *discordgo.Session, i *discordgo.Interaction) {
 	if i.Type != discordgo.InteractionMessageComponent {
 		return
@@ -65,25 +75,44 @@ func (r *Router) Handle(s *discordgo.Session, i *discordgo.Interaction) {
 
 	customID := i.MessageComponentData().CustomID
 
-	// Phân tích custom_id thành domain, action, sessionId, extra
+	// Phân tích custom_id — nếu lỗi format, trả về lỗi ngay (chưa defer, dùng Respond thường)
 	parsed, err := Parse(customID)
 	if err != nil {
-		r.log.Warn("menu.Router: custom_id không hợp lệ", zap.String("customID", customID))
-		ui.RespondEphemeralError(s, i, ui.MsgGenericError)
+		r.log.Warn("custom_id không hợp lệ",
+			zap.String("customID", customID),
+			zap.String("userId", i.Member.User.ID),
+		)
+		_ = s.InteractionRespond(i, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Embeds: []*discordgo.MessageEmbed{ui.ErrorEmbed(ui.MsgGenericError)},
+				Flags:  discordgo.MessageFlagsEphemeral,
+			},
+		})
 		return
 	}
 
+	// ACK ngay để Discord không báo "Tương tác này không thành công".
+	// DeferredMessageUpdate = ACK nhưng không thay đổi message ngay, chờ edit sau.
+	if ackErr := s.InteractionRespond(i, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseDeferredMessageUpdate,
+	}); ackErr != nil {
+		r.log.Warn("Không thể ACK interaction", zap.Error(ackErr))
+		return
+	}
+
+	// Từ đây dùng InteractionResponseEdit (cập nhật menu) và FollowupMessageCreate (ephemeral)
 	ctx := context.Background()
 	userID := i.Member.User.ID
 
-	// --- Bảo mật: xác thực chủ sở hữu phiên ---
+	// Xác thực chủ sở hữu phiên
 	session, err := r.sessionSvc.ValidateOwner(ctx, parsed.SessionID, userID)
 	if err != nil {
 		switch {
 		case apperrors.IsSessionExpired(err):
-			ui.RespondEphemeralError(s, i, ui.MsgSessionExpired)
+			r.sendEphemeral(s, i, ui.ErrorEmbed(ui.MsgSessionExpired))
 		default:
-			ui.RespondEphemeralError(s, i, ui.MsgNotYourMenu)
+			r.sendEphemeral(s, i, ui.ErrorEmbed(ui.MsgNotYourMenu))
 		}
 		return
 	}
@@ -101,44 +130,124 @@ func (r *Router) Handle(s *discordgo.Session, i *discordgo.Interaction) {
 	case DomainCultivation:
 		r.handleCultivationAction(s, i, session, parsed.Action)
 	case DomainInventory:
-		r.handleInventoryAction(s, i, session, parsed.Action)
+		r.handleInventoryAction(s, i, session, parsed.Action, parsed.Extra)
+	case DomainEquipment:
+		r.handleEquipmentAction(s, i, session, parsed.Action, parsed.Extra)
+	case DomainAlchemy:
+		r.handleAlchemyAction(s, i, session, parsed.Action, parsed.Extra)
 	default:
-		r.log.Warn("menu.Router: domain không xác định",
+		r.log.Warn("domain không xác định",
 			zap.String("domain", parsed.Domain),
-			zap.String("customID", customID))
-		ui.RespondEphemeralError(s, i, ui.MsgComingSoon)
+			zap.String("customID", customID),
+			zap.String("userId", userID),
+		)
+		r.sendEphemeral(s, i, ui.WarningEmbed(ui.MsgComingSoon))
 	}
 }
 
-func (r *Router) handleInventoryAction(s *discordgo.Session, i *discordgo.Interaction, session *Session, action string) {
+// handleAlchemyAction xử lý các action thuộc trang Lò Đan.
+func (r *Router) handleAlchemyAction(s *discordgo.Session, i *discordgo.Interaction, session *Session, action, extra string) {
 	ctx := context.Background()
-	var err error
-	var msg string
 
 	switch action {
-	case ActionInventoryUse:
+	case ActionAlchemyView:
 		data := i.MessageComponentData()
-		if len(data.Values) > 0 {
-			msg, err = r.inventorySvc.UseItem(ctx, session.UserID, session.GuildID, data.Values[0])
+		if len(data.Values) == 0 {
+			r.sendEphemeral(s, i, ui.ErrorEmbed(ui.MsgGenericError))
+			return
+		}
+		recipeID := data.Values[0]
+		_ = r.sessionSvc.NavigateTo(ctx, session.SessionID, PageAlchemy, recipeID)
+		session.CurrentCategory = recipeID
+		r.renderPage(s, i, session, PageAlchemy)
+
+	case ActionAlchemyCancel:
+		_ = r.sessionSvc.NavigateTo(ctx, session.SessionID, PageAlchemy, "")
+		session.CurrentCategory = ""
+		r.renderPage(s, i, session, PageAlchemy)
+
+	case ActionAlchemyCraft:
+		recipeID := extra
+		if recipeID == "" {
+			r.sendEphemeral(s, i, ui.ErrorEmbed(ui.MsgGenericError))
+			return
+		}
+
+		// Rand source an toàn cục bộ
+		rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
+
+		res, err := r.alchemySvc.Craft(ctx, session.UserID, session.GuildID, recipeID, rnd)
+		if err != nil {
+			r.log.Error("Craft thất bại",
+				zap.String("userId", session.UserID),
+				zap.String("guildId", session.GuildID),
+				zap.String("recipeId", recipeID),
+				zap.String("step", "alchemySvc.Craft"),
+				zap.Error(err),
+			)
+			r.sendEphemeral(s, i, ui.ErrorEmbed(apperrors.UserFacing(err, "Không đủ nguyên liệu hoặc không thể luyện đan lúc này!")))
+			return
+		}
+
+		r.renderPage(s, i, session, PageAlchemy)
+		if res.Success {
+			r.sendEphemeral(s, i, ui.SuccessEmbed("Luyện Đan", res.Message))
+		} else {
+			r.sendEphemeral(s, i, ui.WarningEmbed(res.Message))
 		}
 	default:
-		ui.RespondEphemeralError(s, i, ui.MsgComingSoon)
-		return
-	}
-
-	if err != nil {
-		ui.RespondEphemeralWarning(s, i, apperrors.UserFacing(err, "Không thể sử dụng vật phẩm này!"))
-		return
-	}
-
-	if msg != "" {
-		r.renderPage(s, i, session, PageInventory)
-		_, _ = s.FollowupMessageCreate(i, true, &discordgo.WebhookParams{
-			Embeds: []*discordgo.MessageEmbed{ui.SuccessEmbed("Túi Đồ", msg)},
-			Flags:  discordgo.MessageFlagsEphemeral,
-		})
+		r.sendEphemeral(s, i, ui.WarningEmbed(ui.MsgComingSoon))
 	}
 }
+
+// --- Helpers response (phải dùng sau khi đã defer) ---
+
+// sendEphemeral gửi followup message ẩn chỉ user thấy.
+func (r *Router) sendEphemeral(s *discordgo.Session, i *discordgo.Interaction, embed *discordgo.MessageEmbed) {
+	_, _ = s.FollowupMessageCreate(i, true, &discordgo.WebhookParams{
+		Embeds: []*discordgo.MessageEmbed{embed},
+		Flags:  discordgo.MessageFlagsEphemeral,
+	})
+}
+
+// renderPage gọi PageLoader tương ứng rồi cập nhật message menu.
+// Phải gọi sau khi đã defer interaction.
+func (r *Router) renderPage(s *discordgo.Session, i *discordgo.Interaction, session *Session, page Page) {
+	loader, ok := r.pageLoaders[page]
+	if !ok {
+		// Trang chưa có loader → hiển thị "đang phát triển" dạng popup, menu giữ nguyên
+		r.sendEphemeral(s, i, ui.WarningEmbed(ui.MsgComingSoon))
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	responseData, err := loader(ctx, session)
+	if err != nil {
+		r.log.Error("page loader thất bại",
+			zap.String("page", string(page)),
+			zap.String("userId", session.UserID),
+			zap.String("guildId", session.GuildID),
+			zap.Error(err),
+		)
+		// Cập nhật menu thành thông báo lỗi, xóa components để tránh spam
+		emptyComps := []discordgo.MessageComponent{}
+		_, _ = s.InteractionResponseEdit(i, &discordgo.WebhookEdit{
+			Embeds:     &[]*discordgo.MessageEmbed{ui.ErrorEmbed(ui.MsgGenericError)},
+			Components: &emptyComps,
+		})
+		return
+	}
+
+	comps := responseData.Components
+	_, _ = s.InteractionResponseEdit(i, &discordgo.WebhookEdit{
+		Embeds:     &responseData.Embeds,
+		Components: &comps,
+	})
+}
+
+// --- Domain Handlers ---
 
 // handleNav xử lý các nút Làm mới / Quay lại / Đóng.
 func (r *Router) handleNav(s *discordgo.Session, i *discordgo.Interaction, session *Session, action, extra string) {
@@ -147,11 +256,7 @@ func (r *Router) handleNav(s *discordgo.Session, i *discordgo.Interaction, sessi
 	switch action {
 	case ActionClose:
 		_ = r.sessionSvc.Close(ctx, session.SessionID)
-		// Gửi tín hiệu phản hồi ngay để tránh Discord báo lỗi timeout
-		_ = s.InteractionRespond(i, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseDeferredMessageUpdate,
-		})
-		// Xóa hoàn toàn tin nhắn menu để giữ kênh gọn gàng
+		// Xóa message menu, loading state tự biến mất khi message không còn tồn tại
 		_ = s.ChannelMessageDelete(i.ChannelID, i.Message.ID)
 
 	case ActionRefresh:
@@ -166,44 +271,59 @@ func (r *Router) handleNav(s *discordgo.Session, i *discordgo.Interaction, sessi
 		if targetPage == "" {
 			targetPage = PageMain
 		}
-		_ = r.sessionSvc.NavigateTo(ctx, session.SessionID, targetPage)
+		_ = r.sessionSvc.NavigateTo(ctx, session.SessionID, targetPage, "")
 		session.CurrentPage = targetPage
 		r.renderPage(s, i, session, targetPage)
 
 	default:
-		ui.RespondEphemeralError(s, i, ui.MsgGenericError)
+		r.sendEphemeral(s, i, ui.ErrorEmbed(ui.MsgGenericError))
 	}
 }
 
-// handleMenuSelect xử lý select menu danh mục trên trang chính.
+// handleMenuSelect xử lý select menu điều hướng trên trang chính.
 func (r *Router) handleMenuSelect(s *discordgo.Session, i *discordgo.Interaction, session *Session, data discordgo.MessageComponentInteractionData) {
 	if len(data.Values) == 0 {
+		r.sendEphemeral(s, i, ui.ErrorEmbed(ui.MsgGenericError))
 		return
 	}
+
 	selected := Page(data.Values[0])
+
+	// Check xem màn hình đích đã được code chưa, nếu chưa thì báo "Đang phát triển" và ngắt luôn
+	if _, ok := r.pageLoaders[selected]; !ok {
+		r.sendEphemeral(s, i, ui.WarningEmbed(ui.MsgComingSoon))
+		return
+	}
+
 	ctx := context.Background()
-	_ = r.sessionSvc.NavigateTo(ctx, session.SessionID, selected)
+	_ = r.sessionSvc.NavigateTo(ctx, session.SessionID, selected, "")
 	session.CurrentPage = selected
 	r.renderPage(s, i, session, selected)
 }
 
-// handleProfileAction phân luồng các action button thuộc trang Hồ Sơ.
+// handleProfileAction xử lý các action thuộc trang Hồ Sơ.
 func (r *Router) handleProfileAction(s *discordgo.Session, i *discordgo.Interaction, _ *Session, action string) {
 	switch action {
 	case ActionRename:
-		// TODO v0.1: mở modal đổi đạo hiệu
-		ui.RespondEphemeralError(s, i, ui.MsgComingSoon)
+		r.sendEphemeral(s, i, ui.WarningEmbed(ui.MsgComingSoon))
 	default:
-		ui.RespondEphemeralError(s, i, ui.MsgComingSoon)
+		r.sendEphemeral(s, i, ui.WarningEmbed(ui.MsgComingSoon))
 	}
 }
 
-// handleCultivationAction phân luồng các action button thuộc trang Tu Luyện.
+// handleCultivationAction xử lý các action thuộc trang Tu Luyện.
 func (r *Router) handleCultivationAction(s *discordgo.Session, i *discordgo.Interaction, session *Session, action string) {
 	ctx := context.Background()
-	in := cultivation.CultivationActionInput{UserID: session.UserID, GuildID: session.GuildID, Now: time.Now().UTC()}
-	var err error
-	var msg string
+	in := cultivation.CultivationActionInput{
+		UserID:  session.UserID,
+		GuildID: session.GuildID,
+		Now:     time.Now().UTC(),
+	}
+
+	var (
+		err error
+		msg string
+	)
 
 	switch action {
 	case ActionMeditate:
@@ -212,100 +332,193 @@ func (r *Router) handleCultivationAction(s *discordgo.Session, i *discordgo.Inte
 		if res != nil {
 			msg = res.Message
 		}
+
 	case ActionClosedDoor:
 		res, e := r.cultivationSvc.Seclusion(ctx, in)
 		err = e
 		if res != nil {
 			msg = res.Message
 		}
+
 	case ActionBodyTraining:
 		res, e := r.cultivationSvc.BodyTraining(ctx, in)
 		err = e
 		if res != nil {
 			msg = res.Message
 		}
+
 	case ActionBreakthrough:
-		bIn := cultivation.BreakthroughInput{UserID: session.UserID, GuildID: session.GuildID, Now: time.Now().UTC(), Rand: rand.New(rand.NewSource(time.Now().UnixNano()))}
+		bIn := cultivation.BreakthroughInput{
+			UserID:  session.UserID,
+			GuildID: session.GuildID,
+			Now:     time.Now().UTC(),
+			Rand:    rand.New(rand.NewSource(time.Now().UnixNano())), //nolint:gosec
+		}
 		res, e := r.cultivationSvc.Breakthrough(ctx, bIn)
 		err = e
 		if res != nil {
 			msg = res.Message
 		}
+
 	case ActionChoosePath:
 		data := i.MessageComponentData()
-		if len(data.Values) > 0 {
-			selectedPath := cultivation.CultivationPath(data.Values[0])
-			err = r.cultivationSvc.ChoosePath(ctx, session.UserID, session.GuildID, selectedPath)
-			if err == nil {
-				msg = fmt.Sprintf("Cảm ngộ thiên địa thành công! Đạo hữu đã chính thức bước lên con đường **%s**.", selectedPath.DisplayName())
-			}
-		} else {
+		if len(data.Values) == 0 {
 			return
 		}
+		selectedPath := cultivation.CultivationPath(data.Values[0])
+		err = r.cultivationSvc.ChoosePath(ctx, session.UserID, session.GuildID, selectedPath)
+		if err == nil {
+			msg = fmt.Sprintf("Cảm ngộ thiên địa thành công! Đạo hữu đã bước lên con đường **%s**.", selectedPath.DisplayName())
+		}
+
 	default:
-		ui.RespondEphemeralError(s, i, ui.MsgComingSoon)
+		r.sendEphemeral(s, i, ui.WarningEmbed(ui.MsgComingSoon))
 		return
 	}
 
-	// Xử lý báo lỗi (nếu có)
 	if err != nil {
 		var cdErr *apperrors.CooldownError
 		switch {
 		case errors.As(err, &cdErr):
-			ui.RespondEphemeralWarning(s, i, fmt.Sprintf("Đạo hữu cần nghỉ ngơi. Vui lòng chờ %s.", cdErr.Remaining))
+			r.sendEphemeral(s, i, ui.WarningEmbed(
+				fmt.Sprintf("Đạo hữu cần nghỉ ngơi. Vui lòng chờ **%s**.", cdErr.Remaining)))
 		case apperrors.IsInsufficientStamina(err):
-			ui.RespondEphemeralWarning(s, i, "Thể lực không đủ! Xin hãy nghỉ ngơi.")
+			r.sendEphemeral(s, i, ui.WarningEmbed("Thể lực không đủ! Hãy nghỉ ngơi để hồi phục."))
 		case apperrors.IsInsufficientFunds(err):
-			ui.RespondEphemeralWarning(s, i, "Linh thạch không đủ để chuẩn bị trận pháp đột phá!")
+			r.sendEphemeral(s, i, ui.WarningEmbed("Linh thạch không đủ để chuẩn bị trận pháp đột phá!"))
 		case errors.Is(err, apperrors.ErrInsufficientCultivationExp):
-			ui.RespondEphemeralWarning(s, i, "Tu vi chưa đạt bình cảnh, không thể miễn cưỡng đột phá.")
+			r.sendEphemeral(s, i, ui.WarningEmbed("Tu vi chưa đạt bình cảnh, không thể miễn cưỡng đột phá."))
 		case errors.Is(err, apperrors.ErrInsufficientMindState):
-			ui.RespondEphemeralWarning(s, i, "Tâm cảnh quá thấp, đột phá lúc này chắc chắn tẩu hỏa nhập ma!")
+			r.sendEphemeral(s, i, ui.WarningEmbed("Tâm cảnh quá thấp, đột phá lúc này chắc chắn tẩu hỏa nhập ma!"))
 		case errors.Is(err, apperrors.ErrMaxRealmReached):
-			ui.RespondEphemeralWarning(s, i, "Đạo hữu đã đứng trên đỉnh phong vạn giới, không thể tiến thêm.")
+			r.sendEphemeral(s, i, ui.WarningEmbed("Đạo hữu đã đứng trên đỉnh phong vạn giới, không thể tiến thêm."))
 		case errors.Is(err, apperrors.ErrPathAlreadyChosen):
-			ui.RespondEphemeralWarning(s, i, "Đạo hữu đã có đạo lộ của riêng mình, không thể cải tu!")
+			r.sendEphemeral(s, i, ui.WarningEmbed("Đạo hữu đã có đạo lộ của riêng mình, không thể cải tu!"))
 		default:
-			r.log.Error("Cultivation action error", zap.Error(err))
-			ui.RespondEphemeralError(s, i, ui.MsgGenericError)
+			r.log.Error("cultivation action lỗi",
+				zap.String("action", action),
+				zap.String("userId", session.UserID),
+				zap.Error(err),
+			)
+			r.sendEphemeral(s, i, ui.ErrorEmbed(ui.MsgGenericError))
 		}
 		return
 	}
 
-	// 1. Cập nhật message gốc ngay lập tức (Real-time UI Edit)
+	// Cập nhật menu tu luyện (hiển thị số liệu mới)
 	r.renderPage(s, i, session, PageCultivation)
 
-	// 2. Gửi thông báo kết quả dạng popup ẩn (Followup Message)
-	_, _ = s.FollowupMessageCreate(i, true, &discordgo.WebhookParams{
-		Embeds: []*discordgo.MessageEmbed{ui.SuccessEmbed("Tu Luyện", msg)},
-		Flags:  discordgo.MessageFlagsEphemeral,
-	})
+	// Gửi popup kết quả ẩn (chỉ user thấy)
+	if msg != "" {
+		r.sendEphemeral(s, i, ui.SuccessEmbed("Tu Luyện", msg))
+	}
 }
 
-// renderPage gọi PageLoader tương ứng và chỉnh sửa message menu hiện tại.
-func (r *Router) renderPage(s *discordgo.Session, i *discordgo.Interaction, session *Session, page Page) {
-	loader, ok := r.pageLoaders[page]
-	if !ok {
-		ui.RespondEphemeralError(s, i, ui.MsgComingSoon)
-		return
+// handleInventoryAction xử lý các action thuộc trang Túi Đồ.
+func (r *Router) handleInventoryAction(s *discordgo.Session, i *discordgo.Interaction, session *Session, action, extra string) {
+	ctx := context.Background()
+
+	switch action {
+	case ActionInventoryPage:
+		// extra là số trang mới (string)
+		if extra == "" {
+			r.sendEphemeral(s, i, ui.ErrorEmbed(ui.MsgGenericError))
+			return
+		}
+		_ = r.sessionSvc.NavigateTo(ctx, session.SessionID, session.CurrentPage, extra)
+		session.CurrentCategory = extra
+		r.renderPage(s, i, session, PageInventory)
+
+	case ActionInventoryUse:
+		data := i.MessageComponentData()
+		if len(data.Values) == 0 {
+			r.sendEphemeral(s, i, ui.ErrorEmbed(ui.MsgGenericError))
+			return
+		}
+		instanceID := data.Values[0]
+		msg, err := r.inventorySvc.UseItem(ctx, session.UserID, session.GuildID, instanceID)
+		if err != nil {
+			r.log.Warn("UseItem thất bại",
+				zap.String("instanceId", instanceID),
+				zap.String("userId", session.UserID),
+				zap.Error(err),
+			)
+			r.sendEphemeral(s, i, ui.WarningEmbed(apperrors.UserFacing(err, "Không thể sử dụng vật phẩm này!")))
+			return
+		}
+		// Làm mới túi đồ sau khi dùng item
+		r.renderPage(s, i, session, PageInventory)
+		if msg != "" {
+			r.sendEphemeral(s, i, ui.SuccessEmbed("Túi Đồ", msg))
+		}
+
+	default:
+		r.sendEphemeral(s, i, ui.WarningEmbed(ui.MsgComingSoon))
 	}
+}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+// handleEquipmentAction xử lý các action thuộc trang Trang Bị.
+func (r *Router) handleEquipmentAction(s *discordgo.Session, i *discordgo.Interaction, session *Session, action, extra string) {
+	ctx := context.Background()
 
-	responseData, err := loader(ctx, session)
-	if err != nil {
-		r.log.Error("menu.Router: page loader thất bại",
-			zap.String("page", string(page)),
-			zap.String("userId", session.UserID),
-			zap.Error(err),
-		)
-		ui.UpdateWithError(s, i, ui.MsgGenericError)
-		return
+	switch action {
+	case ActionEquipmentEquip:
+		// Giá trị select menu: "instanceID:definitionID"
+		data := i.MessageComponentData()
+		if len(data.Values) == 0 {
+			r.sendEphemeral(s, i, ui.ErrorEmbed(ui.MsgGenericError))
+			return
+		}
+		parts := strings.SplitN(data.Values[0], ":", 2)
+		if len(parts) != 2 {
+			r.log.Warn("equip value không hợp lệ", zap.String("value", data.Values[0]))
+			r.sendEphemeral(s, i, ui.ErrorEmbed(ui.MsgGenericError))
+			return
+		}
+		instanceID, definitionID := parts[0], parts[1]
+
+		slot := equipment.GetSlotForDefinition(definitionID)
+		if slot == "" {
+			r.sendEphemeral(s, i, ui.WarningEmbed("Vật phẩm này không thể mặc được!"))
+			return
+		}
+
+		if err := r.equipSvc.Equip(ctx, session.UserID, session.GuildID, slot, instanceID); err != nil {
+			r.log.Error("Equip thất bại",
+				zap.String("userId", session.UserID),
+				zap.String("instanceId", instanceID),
+				zap.String("slot", string(slot)),
+				zap.Error(err),
+			)
+			r.sendEphemeral(s, i, ui.ErrorEmbed(apperrors.UserFacing(err, "Không thể mặc trang bị lúc này!")))
+			return
+		}
+
+		r.renderPage(s, i, session, PageEquipment)
+		r.sendEphemeral(s, i, ui.SuccessEmbed("Trang Bị", "Mặc trang bị thành công!"))
+
+	case ActionEquipmentUnequip:
+		// extra chứa tên slot cần tháo ("weapon", "armor", ...)
+		slot := equipment.EquipmentSlot(extra)
+		if slot == "" {
+			r.sendEphemeral(s, i, ui.ErrorEmbed(ui.MsgGenericError))
+			return
+		}
+
+		if err := r.equipSvc.Unequip(ctx, session.UserID, session.GuildID, slot); err != nil {
+			r.log.Error("Unequip thất bại",
+				zap.String("userId", session.UserID),
+				zap.String("slot", string(slot)),
+				zap.Error(err),
+			)
+			r.sendEphemeral(s, i, ui.ErrorEmbed(apperrors.UserFacing(err, "Không thể tháo trang bị lúc này!")))
+			return
+		}
+
+		r.renderPage(s, i, session, PageEquipment)
+		r.sendEphemeral(s, i, ui.SuccessEmbed("Trang Bị", "Tháo trang bị thành công!"))
+
+	default:
+		r.sendEphemeral(s, i, ui.WarningEmbed(ui.MsgComingSoon))
 	}
-
-	_ = s.InteractionRespond(i, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseUpdateMessage,
-		Data: responseData,
-	})
 }

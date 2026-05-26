@@ -1,7 +1,10 @@
 // File: internal/game/equipment/model.go
 package equipment
 
-import "time"
+import (
+	"strings"
+	"time"
+)
 
 type EquipmentSlot string
 
@@ -10,6 +13,7 @@ const (
 	SlotArmor    EquipmentSlot = "armor"
 	SlotArtifact EquipmentSlot = "artifact"
 	SlotTreasure EquipmentSlot = "treasure"
+	SlotBoots    EquipmentSlot = "boots"
 )
 
 type EquipmentSet struct {
@@ -21,16 +25,20 @@ type EquipmentSet struct {
 }
 
 func GetSlotForDefinition(defID string) EquipmentSlot {
-	switch defID {
-	case "eq_wood_sword", "eq_iron_sword":
+	if strings.HasPrefix(defID, "eq_weapon_") {
 		return SlotWeapon
-	case "eq_cloth_robe", "eq_iron_armor":
-		return SlotArmor
-	case "eq_spirit_bell":
-		return SlotArtifact
-	case "eq_guardian_jade":
-		return SlotTreasure
-	default:
-		return ""
 	}
+	if strings.HasPrefix(defID, "eq_armor_") {
+		return SlotArmor
+	}
+	if strings.HasPrefix(defID, "eq_boots_") {
+		return SlotBoots
+	}
+	if strings.HasPrefix(defID, "eq_artifact_") {
+		return SlotArtifact
+	}
+	if strings.HasPrefix(defID, "eq_treasure_") {
+		return SlotTreasure
+	}
+	return ""
 }

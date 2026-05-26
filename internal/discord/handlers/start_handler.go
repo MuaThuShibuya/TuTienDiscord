@@ -107,7 +107,7 @@ func (h *StartHandler) Handle(s *discordgo.Session, i *discordgo.InteractionCrea
 	}
 
 	// 2. Khởi tạo hồ sơ tu luyện
-	_, err = h.cultivationSvc.GetOrCreate(ctx, userID, guildID)
+	cult, err := h.cultivationSvc.GetOrCreate(ctx, userID, guildID)
 	if err != nil {
 		h.log.Error("/start: GetOrCreate cultivation thất bại", zap.String("userId", userID), zap.Error(err))
 		ui.EditEphemeralError(s, i.Interaction, ui.MsgGenericError)
@@ -126,11 +126,11 @@ func (h *StartHandler) Handle(s *discordgo.Session, i *discordgo.InteractionCrea
 		fmt.Sprintf(
 			"Đạo hữu **%s** đã bước vào thế giới tu tiên!\n\n"+
 				"• Đạo hiệu: **%s**\n"+
-				"• Cảnh giới khởi đầu: **Luyện Khí tầng 1**\n"+
+				"• Cảnh giới khởi đầu: **%s tầng %d**\n"+
 				"• Linh thạch: **500**\n"+
 				"• Vé cơ duyên: **3**\n\n"+
 				"Hãy dùng `/menu` để bắt đầu hành trình!",
-			player.DaoName, player.DaoName,
+			player.DaoName, player.DaoName, cult.Realm.DisplayName(), cult.RealmLevel,
 		),
 	)
 

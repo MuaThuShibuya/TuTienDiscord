@@ -44,7 +44,8 @@ type CultivationProfile struct {
 	CombatPower            int64              `bson:"combatPower"            json:"combatPower"`
 	Stamina                int                `bson:"stamina"                json:"stamina"` // Thể lực hiện tại
 	MaxStamina             int                `bson:"maxStamina"             json:"maxStamina"`
-	MindState              int                `bson:"mindState"              json:"mindState"` // 0 - 100
+	LastStaminaUpdateAt    time.Time          `bson:"lastStaminaUpdateAt"    json:"lastStaminaUpdateAt"` // Thời điểm cập nhật thể lực cuối
+	MindState              int                `bson:"mindState"              json:"mindState"`           // 0 - 100
 	Path                   CultivationPath    `bson:"path"                   json:"path"`
 	CreatedAt              time.Time          `bson:"createdAt"              json:"createdAt"`
 	UpdatedAt              time.Time          `bson:"updatedAt"              json:"updatedAt"`

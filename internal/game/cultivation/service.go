@@ -35,6 +35,12 @@ type Service interface {
 
 	// ChoosePath cho phép người chơi chọn con đường tu tiên (chỉ được chọn 1 lần).
 	ChoosePath(ctx context.Context, userID, guildID string, path CultivationPath) error
+
+	// AddExperience cộng một lượng tu vi cho người chơi (dùng cho đan dược, nhiệm vụ).
+	AddExperience(ctx context.Context, userID, guildID string, amount int64) error
+
+	// AddStamina hồi phục thể lực cho người chơi (dùng cho đan dược).
+	AddStamina(ctx context.Context, userID, guildID string, amount int) error
 }
 
 type cultivationService struct {
@@ -54,9 +60,47 @@ func NewService(repo Repository, cdSvc cooldown.Service, ecoSvc economy.Service)
 	}
 }
 
+// calculateStaminaRegen tính toán số lượng thể lực hồi phục dựa trên thời gian thực
+func (s *cultivationService) calculateStaminaRegen(ctx context.Context, prof *CultivationProfile) error {
+	now := time.Now().UTC()
+	// Chặn lỗi nếu LastUpdate chưa set hoặc đồng hồ hệ thống trôi ngược (thời gian âm)
+	if prof.LastStaminaUpdateAt.IsZero() || now.Before(prof.LastStaminaUpdateAt) {
+		prof.LastStaminaUpdateAt = now
+		return s.repo.UpdateStats(ctx, prof)
+	}
+
+	if prof.Stamina >= prof.MaxStamina {
+		prof.LastStaminaUpdateAt = now // Reset mốc thời gian để tránh tích tụ rác
+		return s.repo.UpdateStats(ctx, prof)
+	}
+
+	minutesPassed := int(now.Sub(prof.LastStaminaUpdateAt).Minutes())
+	staminaRecovered := minutesPassed // 1 phút hồi 1 điểm thể lực
+
+	if staminaRecovered > 0 {
+		s.log.Debug("Tính toán hồi thể lực (Lazy Regen)",
+			zap.String("userId", prof.UserID),
+			zap.Int("minutesPassed", minutesPassed),
+			zap.Int("oldStamina", prof.Stamina),
+		)
+
+		prof.Stamina += staminaRecovered
+		if prof.Stamina > prof.MaxStamina {
+			prof.Stamina = prof.MaxStamina
+		}
+
+		// Cấn trừ thời gian đã dùng để quy đổi, giữ lại số dư phút
+		usedMinutes := staminaRecovered
+		prof.LastStaminaUpdateAt = prof.LastStaminaUpdateAt.Add(time.Duration(usedMinutes) * time.Minute)
+		return s.repo.UpdateStats(ctx, prof)
+	}
+	return nil
+}
+
 func (s *cultivationService) GetOrCreate(ctx context.Context, userID, guildID string) (*CultivationProfile, error) {
 	profile, err := s.repo.FindByUserID(ctx, userID, guildID)
 	if err == nil {
+		_ = s.calculateStaminaRegen(ctx, profile)
 		return profile, nil
 	}
 	if !apperrors.IsNotFound(err) {
@@ -67,6 +111,7 @@ func (s *cultivationService) GetOrCreate(ctx context.Context, userID, guildID st
 
 	// Tạo hồ sơ mới với giá trị khởi đầu
 	newProfile := NewCultivationProfile(userID, guildID)
+
 	if err := s.repo.Upsert(ctx, newProfile); err != nil {
 		s.log.Error("GetOrCreate: không tạo được hồ sơ tu luyện",
 			zap.String("userId", userID), zap.Error(err))
@@ -79,7 +124,11 @@ func (s *cultivationService) GetOrCreate(ctx context.Context, userID, guildID st
 }
 
 func (s *cultivationService) GetProfile(ctx context.Context, userID, guildID string) (*CultivationProfile, error) {
-	return s.repo.FindByUserID(ctx, userID, guildID)
+	prof, err := s.repo.FindByUserID(ctx, userID, guildID)
+	if err == nil {
+		_ = s.calculateStaminaRegen(ctx, prof)
+	}
+	return prof, err
 }
 
 // clamp giới hạn giá trị trong khoảng min-max.
@@ -324,5 +373,36 @@ func (s *cultivationService) ChoosePath(ctx context.Context, userID, guildID str
 	}
 
 	prof.Path = path
+	return s.repo.UpdateStats(ctx, prof)
+}
+
+func (s *cultivationService) AddExperience(ctx context.Context, userID, guildID string, amount int64) error {
+	if amount <= 0 {
+		return nil
+	}
+
+	prof, err := s.GetProfile(ctx, userID, guildID)
+	if err != nil {
+		return err
+	}
+
+	prof.CultivationExp += amount
+	return s.repo.UpdateStats(ctx, prof)
+}
+
+func (s *cultivationService) AddStamina(ctx context.Context, userID, guildID string, amount int) error {
+	if amount <= 0 {
+		return nil
+	}
+
+	prof, err := s.GetProfile(ctx, userID, guildID)
+	if err != nil {
+		return err
+	}
+
+	prof.Stamina += amount
+	if prof.Stamina > prof.MaxStamina {
+		prof.Stamina = prof.MaxStamina
+	}
 	return s.repo.UpdateStats(ctx, prof)
 }

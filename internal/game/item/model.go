@@ -13,26 +13,35 @@ const (
 	TypeMaterial  ItemType = "material"
 	TypePill      ItemType = "pill"
 	TypeEquipment ItemType = "equipment"
+	TypeFurnace   ItemType = "furnace"
 )
 
 type ItemRarity string
 
 const (
-	RarityD ItemRarity = "D"
-	RarityC ItemRarity = "C"
-	RarityB ItemRarity = "B"
-	RarityA ItemRarity = "A"
-	RarityS ItemRarity = "S"
+	RarityD    ItemRarity = "D"
+	RarityC    ItemRarity = "C"
+	RarityB    ItemRarity = "B"
+	RarityA    ItemRarity = "A"
+	RarityS    ItemRarity = "S"
+	RaritySS   ItemRarity = "SS"
+	RaritySSS  ItemRarity = "SSS"
+	RaritySSSP ItemRarity = "SSS+"
 )
 
 type ItemDefinition struct {
-	ID        string
-	Name      string
-	Type      ItemType
-	Rarity    ItemRarity
-	Stackable bool
-	MaxStack  int
-	Usable    bool
+	ID            string
+	Name          string
+	Type          ItemType
+	Rarity        ItemRarity
+	Stackable     bool
+	MaxStack      int
+	Usable        bool
+	Description   string
+	Effects       map[string]int // Dùng cho đan dược (buff exp, stamina...)
+	Stats         map[string]int // Dùng cho trang bị & lò đan (attack, defense...)
+	RequiredRealm string         // Cảnh giới yêu cầu (nếu có)
+	SellPrice     int64          // Giá bán ra linh thạch
 }
 
 type ItemInstance struct {

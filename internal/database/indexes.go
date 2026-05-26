@@ -65,6 +65,16 @@ func EnsureIndexes(ctx context.Context, db *mongo.Database) error {
 		log.Error("Không tạo được index cho collection items", zap.Error(err))
 	}
 
+	if err := ensureEquipmentIndexes(indexCtx, db); err != nil {
+		errs = append(errs, err)
+		log.Error("Không tạo được index cho collection equipment_sets", zap.Error(err))
+	}
+
+	if err := ensureAlchemyIndexes(indexCtx, db); err != nil {
+		errs = append(errs, err)
+		log.Error("Không tạo được index cho collection alchemy_profiles", zap.Error(err))
+	}
+
 	if len(errs) > 0 {
 		// Trả về lỗi đầu tiên — caller (main.go) sẽ Fatal và không khởi động
 		return errs[0]
@@ -92,6 +102,31 @@ func ensurePlayerIndexes(ctx context.Context, db *mongo.Database) error {
 	return err
 }
 
+// ensureAlchemyIndexes tạo index cho collection alchemy_profiles.
+// - Unique compound (userId + guildId).
+func ensureAlchemyIndexes(ctx context.Context, db *mongo.Database) error {
+	col := db.Collection("alchemy_profiles")
+	_, err := col.Indexes().CreateMany(ctx, []mongo.IndexModel{
+		{
+			Keys:    bson.D{{Key: "userId", Value: 1}, {Key: "guildId", Value: 1}},
+			Options: options.Index().SetUnique(true).SetName("idx_alchemy_user_guild"),
+		},
+	})
+	return err
+}
+
+// ensureEquipmentIndexes tạo index cho collection equipment_sets.
+func ensureEquipmentIndexes(ctx context.Context, db *mongo.Database) error {
+	col := db.Collection("equipment_sets")
+	_, err := col.Indexes().CreateMany(ctx, []mongo.IndexModel{
+		{
+			Keys:    bson.D{{Key: "userId", Value: 1}, {Key: "guildId", Value: 1}},
+			Options: options.Index().SetUnique(true).SetName("idx_equipment_user_guild"),
+		},
+	})
+	return err
+}
+
 // ensureInventoryIndexes tạo index cho collection inventories.
 // - Unique compound (userId + guildId): mỗi người chơi chỉ có 1 túi đồ mỗi server.
 func ensureInventoryIndexes(ctx context.Context, db *mongo.Database) error {
@@ -109,7 +144,7 @@ func ensureInventoryIndexes(ctx context.Context, db *mongo.Database) error {
 // - Compound (userId + guildId): Truy xuất nhanh toàn bộ vật phẩm trong túi của 1 người.
 // - Unique (instanceId): Định danh duy nhất cho từng món đồ/stack đồ.
 func ensureItemIndexes(ctx context.Context, db *mongo.Database) error {
-	col := db.Collection("items") // Giả định tên collection là "items"
+	col := db.Collection("item_instances") // Khớp với tên dùng trong item/mongo_repository.go
 	_, err := col.Indexes().CreateMany(ctx, []mongo.IndexModel{
 		{
 			Keys:    bson.D{{Key: "userId", Value: 1}, {Key: "guildId", Value: 1}},

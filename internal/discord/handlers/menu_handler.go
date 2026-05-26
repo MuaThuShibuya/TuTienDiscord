@@ -1,11 +1,9 @@
 // File: internal/discord/handlers/menu_handler.go
-// Phiên bản: v0.1.1
-// Mục đích: Controller cho lệnh /menu — mở giao diện game tổng hợp.
+// Chức năng: Controller cho lệnh /menu — mở giao diện game tổng hợp.
 // Bảo mật: Xác minh người chơi đã đăng ký trước khi tạo phiên menu.
-//           Session dùng sessionId sinh ngẫu nhiên (crypto/rand). Mọi tương tác sau đó
-//           đều được xác thực qua menu.Router.
-// Ghi chú: /menu luôn mở trang Main. Điều hướng giữa các trang xảy ra qua menu.Router.
-//           PageLoader được inject để handler không trực tiếp gọi DB.
+//          Session dùng sessionId sinh ngẫu nhiên (crypto/rand).
+// Ghi chú: /menu luôn mở trang Main. Điều hướng xảy ra qua menu.Router.
+//          PageLoader inject để handler không trực tiếp gọi DB.
 
 package handlers
 
@@ -21,7 +19,14 @@ import (
 	apperrors "github.com/whiskey/tu-tien-bot/internal/apperrors"
 	"github.com/whiskey/tu-tien-bot/internal/config"
 	"github.com/whiskey/tu-tien-bot/internal/discord/menu"
+	alchemymenu "github.com/whiskey/tu-tien-bot/internal/discord/menu/alchemy"
+	cultivmenu "github.com/whiskey/tu-tien-bot/internal/discord/menu/cultivation"
+	equipmenu "github.com/whiskey/tu-tien-bot/internal/discord/menu/equipment"
+	invmenu "github.com/whiskey/tu-tien-bot/internal/discord/menu/inventory"
+	mainmenu "github.com/whiskey/tu-tien-bot/internal/discord/menu/main"
+	profilemenu "github.com/whiskey/tu-tien-bot/internal/discord/menu/profile"
 	"github.com/whiskey/tu-tien-bot/internal/discord/ui"
+	"github.com/whiskey/tu-tien-bot/internal/game/alchemy"
 	"github.com/whiskey/tu-tien-bot/internal/game/cultivation"
 	"github.com/whiskey/tu-tien-bot/internal/game/economy"
 	"github.com/whiskey/tu-tien-bot/internal/game/equipment"
@@ -40,6 +45,7 @@ type MenuHandler struct {
 	economySvc     economy.Service
 	inventorySvc   inventory.Service
 	equipSvc       equipment.Service
+	alchemySvc     alchemy.Service
 	sessionSvc     menu.SessionService
 	log            *zap.Logger
 }
@@ -52,6 +58,7 @@ func NewMenuHandler(
 	economySvc economy.Service,
 	inventorySvc inventory.Service,
 	equipSvc equipment.Service,
+	alchemySvc alchemy.Service,
 	sessionSvc menu.SessionService,
 ) *MenuHandler {
 	return &MenuHandler{
@@ -61,6 +68,7 @@ func NewMenuHandler(
 		economySvc:     economySvc,
 		inventorySvc:   inventorySvc,
 		equipSvc:       equipSvc,
+		alchemySvc:     alchemySvc,
 		sessionSvc:     sessionSvc,
 		log:            logger.L().Named("handler.menu"),
 	}
@@ -82,7 +90,6 @@ func (h *MenuHandler) Handle(s *discordgo.Session, i *discordgo.InteractionCreat
 
 	h.log.Debug("/menu được gọi", zap.String("userId", userID), zap.String("guildId", guildID))
 
-	// 1. Kiểm tra người chơi đã đăng ký chưa
 	player, err := h.profileSvc.GetPlayer(ctx, userID, guildID)
 	if err != nil {
 		if apperrors.IsNotFound(err) {
@@ -94,7 +101,6 @@ func (h *MenuHandler) Handle(s *discordgo.Session, i *discordgo.InteractionCreat
 		return
 	}
 
-	// 2. Tải hồ sơ tu luyện và ví
 	cult, err := h.cultivationSvc.GetOrCreate(ctx, userID, guildID)
 	if err != nil {
 		h.log.Error("/menu: GetOrCreate cultivation thất bại", zap.String("userId", userID), zap.Error(err))
@@ -109,7 +115,6 @@ func (h *MenuHandler) Handle(s *discordgo.Session, i *discordgo.InteractionCreat
 		return
 	}
 
-	// 3. Tạo phiên menu mới
 	session, err := h.sessionSvc.OpenMenu(ctx, userID, guildID, channelID, h.cfg.Menu.SessionTTL)
 	if err != nil {
 		h.log.Error("/menu: OpenMenu thất bại", zap.String("userId", userID), zap.Error(err))
@@ -117,11 +122,8 @@ func (h *MenuHandler) Handle(s *discordgo.Session, i *discordgo.InteractionCreat
 		return
 	}
 
-	// 4. Map domain models → ViewModel → gọi UI Builder
-	vm := toMainMenuVM(session, player, cult, wallet)
-	responseData := menu.BuildMainMenuResponse(vm)
+	responseData := mainmenu.BuildMenuResponse(toMainMenuVM(session, player, cult, wallet))
 
-	// 5. Gửi response (tạo message mới)
 	err = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: responseData,
@@ -131,13 +133,11 @@ func (h *MenuHandler) Handle(s *discordgo.Session, i *discordgo.InteractionCreat
 		return
 	}
 
-	// 6. Lưu message ID để có thể chỉnh sửa sau
 	msg, err := s.InteractionResponse(i.Interaction)
 	if err == nil && msg != nil {
 		_ = h.sessionSvc.SetMessageID(ctx, session.SessionID, msg.ID)
 	}
 
-	// 7. Cập nhật lần cuối hoạt động
 	h.profileSvc.TouchLastActive(ctx, userID, guildID)
 }
 
@@ -148,71 +148,169 @@ func (h *MenuHandler) PageLoaders() map[menu.Page]menu.PageLoader {
 		menu.PageProfile:     h.loadProfilePage,
 		menu.PageCultivation: h.loadCultivationPage,
 		menu.PageInventory:   h.loadInventoryPage,
-		// TODO v0.3+: thêm PageInventory, PageSkills, PagePets, PageGacha, PageMarket, PageSect
+		menu.PageEquipment:   h.loadEquipmentPage,
+		menu.PageAlchemy:     h.loadAlchemyPage,
 	}
+}
+
+func (h *MenuHandler) loadMainPage(ctx context.Context, session *menu.Session) (*discordgo.InteractionResponseData, error) {
+	player, err := h.profileSvc.GetPlayer(ctx, session.UserID, session.GuildID)
+	if err != nil {
+		h.log.Error("loadMainPage failed", zap.String("step", "profile"), zap.Error(err))
+		return nil, fmt.Errorf("loadMainPage profile: %w", err)
+	}
+	cult, err := h.cultivationSvc.GetOrCreate(ctx, session.UserID, session.GuildID)
+	if err != nil {
+		h.log.Error("loadMainPage failed", zap.String("step", "cultivation"), zap.Error(err))
+		return nil, fmt.Errorf("loadMainPage cultivation: %w", err)
+	}
+	wallet, err := h.economySvc.GetOrCreate(ctx, session.UserID, session.GuildID)
+	if err != nil {
+		h.log.Error("loadMainPage failed", zap.String("step", "wallet"), zap.Error(err))
+		return nil, fmt.Errorf("loadMainPage wallet: %w", err)
+	}
+	return mainmenu.BuildMenuEdit(toMainMenuVM(session, player, cult, wallet)), nil
+}
+
+func (h *MenuHandler) loadProfilePage(ctx context.Context, session *menu.Session) (*discordgo.InteractionResponseData, error) {
+	player, err := h.profileSvc.GetPlayer(ctx, session.UserID, session.GuildID)
+	if err != nil {
+		h.log.Error("loadProfilePage failed", zap.String("step", "profile"), zap.Error(err))
+		return nil, fmt.Errorf("loadProfilePage profile: %w", err)
+	}
+	wallet, err := h.economySvc.GetOrCreate(ctx, session.UserID, session.GuildID)
+	if err != nil {
+		h.log.Error("loadProfilePage failed", zap.String("step", "wallet"), zap.Error(err))
+		return nil, fmt.Errorf("loadProfilePage wallet: %w", err)
+	}
+	return profilemenu.BuildMenuResponse(toProfileMenuVM(session, player, wallet)), nil
+}
+
+func (h *MenuHandler) loadCultivationPage(ctx context.Context, session *menu.Session) (*discordgo.InteractionResponseData, error) {
+	player, err := h.profileSvc.GetPlayer(ctx, session.UserID, session.GuildID)
+	if err != nil {
+		h.log.Error("loadCultivationPage failed", zap.String("step", "profile"), zap.Error(err))
+		return nil, fmt.Errorf("loadCultivationPage profile: %w", err)
+	}
+	cult, err := h.cultivationSvc.GetOrCreate(ctx, session.UserID, session.GuildID)
+	if err != nil {
+		h.log.Error("loadCultivationPage failed", zap.String("step", "cultivation"), zap.Error(err))
+		return nil, fmt.Errorf("loadCultivationPage cultivation: %w", err)
+	}
+	return cultivmenu.BuildMenuResponse(toCultivationMenuVM(session, player, cult)), nil
 }
 
 func (h *MenuHandler) loadInventoryPage(ctx context.Context, session *menu.Session) (*discordgo.InteractionResponseData, error) {
 	player, err := h.profileSvc.GetPlayer(ctx, session.UserID, session.GuildID)
 	if err != nil {
+		h.log.Error("loadInventoryPage failed", zap.String("step", "profile"), zap.Error(err))
 		return nil, err
 	}
-
 	_, items, err := h.inventorySvc.GetInventory(ctx, session.UserID, session.GuildID)
 	if err != nil {
-		return nil, err
+		if apperrors.IsNotFound(err) {
+			items = []*item.ItemInstance{} // Fix: Túi đồ trống không phải là lỗi
+		} else {
+			h.log.Error("loadInventoryPage failed", zap.String("step", "get_inventory"), zap.Error(err))
+			return nil, err
+		}
 	}
-
-	vm := toInventoryMenuVM(session, player, items)
-	return menu.BuildInventoryMenuResponse(vm), nil
+	return invmenu.BuildMenuResponse(toInventoryMenuVM(session, player, items)), nil
 }
 
-// loadMainPage tải dữ liệu và render trang Main Menu.
-func (h *MenuHandler) loadMainPage(ctx context.Context, session *menu.Session) (*discordgo.InteractionResponseData, error) {
+func (h *MenuHandler) loadEquipmentPage(ctx context.Context, session *menu.Session) (*discordgo.InteractionResponseData, error) {
 	player, err := h.profileSvc.GetPlayer(ctx, session.UserID, session.GuildID)
 	if err != nil {
-		return nil, fmt.Errorf("loadMainPage profile: %w", err)
+		return nil, fmt.Errorf("loadEquipmentPage profile: %w", err)
 	}
 	cult, err := h.cultivationSvc.GetOrCreate(ctx, session.UserID, session.GuildID)
 	if err != nil {
-		return nil, fmt.Errorf("loadMainPage cultivation: %w", err)
+		return nil, fmt.Errorf("loadEquipmentPage cultivation: %w", err)
 	}
-	wallet, err := h.economySvc.GetOrCreate(ctx, session.UserID, session.GuildID)
+	equipSet, err := h.equipSvc.GetEquipment(ctx, session.UserID, session.GuildID)
 	if err != nil {
-		return nil, fmt.Errorf("loadMainPage wallet: %w", err)
+		return nil, fmt.Errorf("loadEquipmentPage equipment: %w", err)
 	}
-	return menu.BuildMainMenuEdit(toMainMenuVM(session, player, cult, wallet)), nil
+	_, allItems, err := h.inventorySvc.GetInventory(ctx, session.UserID, session.GuildID)
+	if err != nil {
+		return nil, fmt.Errorf("loadEquipmentPage inventory: %w", err)
+	}
+	return equipmenu.BuildMenuResponse(toEquipmentMenuVM(session, player, cult, equipSet, allItems)), nil
 }
 
-// loadProfilePage tải dữ liệu và render trang Hồ Sơ.
-func (h *MenuHandler) loadProfilePage(ctx context.Context, session *menu.Session) (*discordgo.InteractionResponseData, error) {
-	player, err := h.profileSvc.GetPlayer(ctx, session.UserID, session.GuildID)
+func (h *MenuHandler) loadAlchemyPage(ctx context.Context, session *menu.Session) (*discordgo.InteractionResponseData, error) {
+	profile, err := h.alchemySvc.GetProfile(ctx, session.UserID, session.GuildID)
 	if err != nil {
-		return nil, fmt.Errorf("loadProfilePage profile: %w", err)
+		h.log.Error("loadAlchemyPage failed", zap.String("step", "get_profile"), zap.Error(err))
+		return nil, fmt.Errorf("loadAlchemyPage: %w", err)
 	}
-	wallet, err := h.economySvc.GetOrCreate(ctx, session.UserID, session.GuildID)
-	if err != nil {
-		return nil, fmt.Errorf("loadProfilePage wallet: %w", err)
+
+	expReq := int64(profile.Level * 100)
+	expBar := fmt.Sprintf("`%s` %d/%d",
+		utils.ProgressBar(int(profile.Exp), int(expReq), 10),
+		profile.Exp, expReq)
+
+	// Lấy túi đồ hiện tại để check nguyên liệu
+	_, items, err := h.inventorySvc.GetInventory(ctx, session.UserID, session.GuildID)
+	playerHas := make(map[string]int64)
+	if err == nil {
+		for _, it := range items {
+			playerHas[it.DefinitionID] += it.Quantity
+		}
 	}
-	return menu.BuildProfileMenuResponse(toProfileMenuVM(session, player, wallet)), nil
+
+	var recipes []menu.RecipeVM
+	var selectedRecipe *menu.RecipeVM
+
+	for _, r := range alchemy.Recipes {
+		var matStr string
+		canCraft := true
+		for reqDefID, reqQty := range r.RequiredItems {
+			hasQty := playerHas[reqDefID]
+			name := reqDefID
+			if def, ok := item.GetDefinition(reqDefID); ok {
+				name = def.Name
+			}
+			status := "Đủ"
+			if hasQty < reqQty {
+				status = "Thiếu"
+				canCraft = false
+			}
+			matStr += fmt.Sprintf("• %s: %d/%d - %s\n", name, hasQty, reqQty, status)
+		}
+
+		recipeVM := menu.RecipeVM{
+			ID:            r.ID,
+			Name:          r.Name,
+			SuccessRate:   fmt.Sprintf("%.0f%%", r.SuccessRate*100),
+			LevelRequired: r.LevelRequired,
+			Materials:     matStr,
+			CanCraft:      canCraft,
+		}
+
+		recipes = append(recipes, recipeVM)
+
+		if session.CurrentCategory == r.ID {
+			copied := recipeVM
+			selectedRecipe = &copied
+		}
+	}
+
+	// Mẹo luyện đan
+	tip := "Luyện đan có rủi ro thất bại, hãy thu thập đủ nguyên liệu và nâng cấp độ trước khi thử luyện linh đan phẩm chất cao."
+
+	return alchemymenu.BuildMenuResponse(&menu.AlchemyMenuVM{
+		SessionID:      session.SessionID,
+		Level:          profile.Level,
+		ExpBar:         expBar,
+		Title:          "Dược Đồng", // Tạm thời hardcode, sau này bạn có thể map logic danh hiệu tại đây
+		DailyTip:       tip,
+		Recipes:        recipes,
+		SelectedRecipe: selectedRecipe,
+	}), nil
 }
 
-// loadCultivationPage tải dữ liệu và render trang Tu Luyện.
-func (h *MenuHandler) loadCultivationPage(ctx context.Context, session *menu.Session) (*discordgo.InteractionResponseData, error) {
-	player, err := h.profileSvc.GetPlayer(ctx, session.UserID, session.GuildID)
-	if err != nil {
-		return nil, fmt.Errorf("loadCultivationPage profile: %w", err)
-	}
-	cult, err := h.cultivationSvc.GetOrCreate(ctx, session.UserID, session.GuildID)
-	if err != nil {
-		return nil, fmt.Errorf("loadCultivationPage cultivation: %w", err)
-	}
-	return menu.BuildCultivationMenuResponse(toCultivationMenuVM(session, player, cult)), nil
-}
-
-// --- ViewModel mapping functions ---
-// Tất cả logic format dữ liệu (số, progress bar, timestamp) nằm ở đây,
-// UI Builder chỉ nhận chuỗi đã format sẵn.
+// --- ViewModel mapping ---
 
 func toMainMenuVM(session *menu.Session, player *profile.Player, cult *cultivation.CultivationProfile, wallet *economy.Wallet) *menu.MainMenuVM {
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
@@ -281,9 +379,14 @@ func toCultivationMenuVM(session *menu.Session, player *profile.Player, cult *cu
 }
 
 func toInventoryMenuVM(session *menu.Session, player *profile.Player, items []*item.ItemInstance) *menu.InventoryMenuVM {
-	// Logic Phân trang (Pagination) bảo vệ giới hạn 25 của Discord
 	const itemsPerPage = 20
-	page := 1 // Mặc định trang 1 (Có thể mở rộng lấy từ session.Data hoặc URL router sau này)
+	page := 1
+	if session.CurrentCategory != "" {
+		fmt.Sscanf(session.CurrentCategory, "%d", &page)
+	}
+	if page < 1 {
+		page = 1
+	}
 
 	totalItems := len(items)
 	totalPages := (totalItems + itemsPerPage - 1) / itemsPerPage
@@ -302,26 +405,166 @@ func toInventoryMenuVM(session *menu.Session, player *profile.Player, items []*i
 
 	var itemVMs []menu.InventoryItemVM
 	for _, it := range items[start:end] {
-		name := it.DefinitionID
-		// Cố gắng lấy tên thật của vật phẩm từ từ điển (nếu có)
-		if def, ok := item.GetDefinition(it.DefinitionID); ok {
-			name = def.Name
-		}
-
-		itemVMs = append(itemVMs, menu.InventoryItemVM{
+		vm := menu.InventoryItemVM{
 			InstanceID: it.InstanceID,
-			Name:       name,
+			Name:       it.DefinitionID,
 			Quantity:   it.Quantity,
+		}
+		if def, ok := item.GetDefinition(it.DefinitionID); ok {
+			vm.Name = def.Name
+			vm.Rarity = string(def.Rarity)
+			vm.IsEquip = def.Type == item.TypeEquipment
+			vm.IsUsable = def.Usable
+		} else {
+			vm.Name = "Vật phẩm lỗi (" + it.DefinitionID + ")"
+			vm.Rarity = "D" // Tránh UI bị crash khi thiếu Rarity
+		}
+		itemVMs = append(itemVMs, vm)
+	}
+
+	var usableVMs []menu.InventoryItemVM
+	for _, it := range items {
+		if len(usableVMs) >= 25 {
+			break
+		}
+		def, ok := item.GetDefinition(it.DefinitionID)
+		if !ok || !def.Usable {
+			continue
+		}
+		usableVMs = append(usableVMs, menu.InventoryItemVM{
+			InstanceID: it.InstanceID,
+			Name:       def.Name,
+			Quantity:   it.Quantity,
+			Rarity:     string(def.Rarity),
+			IsUsable:   true,
+		})
+	}
+
+	// Fix: Discord API sẽ báo lỗi 400 nếu Select Menu không có option nào.
+	// Nếu không có vật phẩm khả dụng, thêm 1 option giả để tránh lỗi hiển thị UI.
+	if len(usableVMs) == 0 {
+		usableVMs = append(usableVMs, menu.InventoryItemVM{
+			InstanceID: "empty",
+			Name:       "Không có vật phẩm khả dụng",
+			Quantity:   0,
+			Rarity:     "D",
 		})
 	}
 
 	return &menu.InventoryMenuVM{
-		SessionID: session.SessionID,
-		DaoName:   player.DaoName,
-		// Đã xóa SlotLimit vì view model hiện tại không định nghĩa trường này
-		Items: itemVMs,
-		// Cần thêm 2 trường này vào menu.InventoryMenuVM của bạn bên gói menu
-		// CurrentPage: page,
-		// TotalPages:  totalPages,
+		SessionID:   session.SessionID,
+		DaoName:     player.DaoName,
+		SlotUsage:   fmt.Sprintf("%d/50", totalItems),
+		Items:       itemVMs,
+		UsableItems: usableVMs,
+		CurrentPage: page,
+		TotalPages:  totalPages,
+	}
+}
+
+func toEquipmentMenuVM(
+	session *menu.Session,
+	player *profile.Player,
+	cult *cultivation.CultivationProfile,
+	equipSet *equipment.EquipmentSet,
+	allItems []*item.ItemInstance,
+) *menu.EquipmentMenuVM {
+	instanceMap := make(map[string]*item.ItemInstance, len(allItems))
+	for _, it := range allItems {
+		instanceMap[it.InstanceID] = it
+	}
+
+	toEquippedVM := func(slot equipment.EquipmentSlot, slotName string) *menu.EquippedItemVM {
+		instanceID, ok := equipSet.Slots[string(slot)]
+		if !ok || instanceID == "" {
+			return nil
+		}
+		vm := &menu.EquippedItemVM{
+			Slot:     string(slot),
+			SlotName: slotName,
+			Name:     "Vật phẩm lỗi",
+			Rarity:   "D",
+		}
+		if it, found := instanceMap[instanceID]; found {
+			if def, ok := item.GetDefinition(it.DefinitionID); ok {
+				vm.Name = def.Name
+				vm.Rarity = string(def.Rarity)
+			} else {
+				vm.Name = "Lỗi: " + it.DefinitionID
+			}
+		}
+		return vm
+	}
+
+	vm := &menu.EquipmentMenuVM{
+		SessionID:   session.SessionID,
+		DaoName:     player.DaoName,
+		CombatPower: utils.FormatNumber(cult.CombatPower),
+		Weapon:      toEquippedVM(equipment.SlotWeapon, "Vũ Khí"),
+		Armor:       toEquippedVM(equipment.SlotArmor, "Giáp"),
+		Artifact:    toEquippedVM(equipment.SlotArtifact, "Pháp Bảo"),
+		Treasure:    toEquippedVM(equipment.SlotTreasure, "Bảo Vật"),
+		Boots:       toEquippedVM(equipment.SlotBoots, "Giày"),
+	}
+
+	equippedIDs := make(map[string]bool)
+	for _, instanceID := range equipSet.Slots {
+		if instanceID != "" {
+			equippedIDs[instanceID] = true
+		}
+	}
+
+	for _, it := range allItems {
+		if len(vm.Equippable) >= 25 {
+			break
+		}
+		if equippedIDs[it.InstanceID] {
+			continue
+		}
+		def, ok := item.GetDefinition(it.DefinitionID)
+		if !ok || def.Type != item.TypeEquipment {
+			continue
+		}
+		slot := equipment.GetSlotForDefinition(it.DefinitionID)
+		if slot == "" {
+			continue
+		}
+		vm.Equippable = append(vm.Equippable, menu.EquippableItemVM{
+			InstanceID:   it.InstanceID,
+			DefinitionID: it.DefinitionID,
+			Name:         def.Name,
+			Rarity:       string(def.Rarity),
+			SlotName:     slotDisplayName(slot),
+		})
+	}
+
+	// Fix: Tránh lỗi Discord API khi Select Menu không có option.
+	if len(vm.Equippable) == 0 {
+		vm.Equippable = append(vm.Equippable, menu.EquippableItemVM{
+			InstanceID:   "empty",
+			DefinitionID: "empty",
+			Name:         "Không có trang bị khả dụng",
+			Rarity:       "D",
+			SlotName:     "Trống",
+		})
+	}
+
+	return vm
+}
+
+func slotDisplayName(slot equipment.EquipmentSlot) string {
+	switch slot {
+	case equipment.SlotWeapon:
+		return "Vũ Khí"
+	case equipment.SlotArmor:
+		return "Giáp"
+	case equipment.SlotArtifact:
+		return "Pháp Bảo"
+	case equipment.SlotTreasure:
+		return "Bảo Vật"
+	case equipment.SlotBoots:
+		return "Giày"
+	default:
+		return string(slot)
 	}
 }
