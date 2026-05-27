@@ -9,7 +9,7 @@ import "go.mongodb.org/mongo-driver/bson/primitive"
 
 // Giá trị khởi đầu cho người chơi mới tạo tài khoản.
 const (
-	DefaultRealm          = Realm("Phàm Nhân") // Cảnh giới bắt đầu v0.2
+	DefaultRealm          = Realm("pham_nhan") // Cảnh giới bắt đầu ID chuẩn
 	DefaultRealmLevel     = 1
 	DefaultCultivationExp = int64(0)
 	DefaultExpRequired    = int64(200) // Khớp với CalculateNextExpRequired

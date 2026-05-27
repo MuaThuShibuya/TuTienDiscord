@@ -40,6 +40,7 @@ type Router struct {
 	inventorySvc   inventory.Service
 	equipSvc       equipment.Service
 	alchemySvc     alchemy.Service
+	pveHandler     func(s *discordgo.Session, i *discordgo.Interaction, session *Session, action, extra string)
 	pageLoaders    map[Page]PageLoader
 	log            *zap.Logger
 }
@@ -52,6 +53,7 @@ func NewRouter(
 	invSvc inventory.Service,
 	equipSvc equipment.Service,
 	alchemySvc alchemy.Service,
+	pveHandler func(s *discordgo.Session, i *discordgo.Interaction, session *Session, action, extra string),
 	loaders map[Page]PageLoader,
 ) *Router {
 	return &Router{
@@ -61,6 +63,7 @@ func NewRouter(
 		inventorySvc:   invSvc,
 		equipSvc:       equipSvc,
 		alchemySvc:     alchemySvc,
+		pveHandler:     pveHandler,
 		pageLoaders:    loaders,
 		log:            logger.L().Named("menu.router"),
 	}
@@ -135,6 +138,10 @@ func (r *Router) Handle(s *discordgo.Session, i *discordgo.Interaction) {
 		r.handleEquipmentAction(s, i, session, parsed.Action, parsed.Extra)
 	case DomainAlchemy:
 		r.handleAlchemyAction(s, i, session, parsed.Action, parsed.Extra)
+	case DomainPvE:
+		if r.pveHandler != nil {
+			r.pveHandler(s, i, session, parsed.Action, parsed.Extra)
+		}
 	default:
 		r.log.Warn("domain không xác định",
 			zap.String("domain", parsed.Domain),

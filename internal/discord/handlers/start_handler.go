@@ -17,6 +17,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/whiskey/tu-tien-bot/internal/discord/ui"
+	"github.com/whiskey/tu-tien-bot/internal/game/aptitude"
 	"github.com/whiskey/tu-tien-bot/internal/game/cultivation"
 	"github.com/whiskey/tu-tien-bot/internal/game/economy"
 	"github.com/whiskey/tu-tien-bot/internal/game/inventory"
@@ -30,6 +31,7 @@ type StartHandler struct {
 	cultivationSvc cultivation.Service
 	economySvc     economy.Service
 	inventorySvc   inventory.Service
+	aptitudeSvc    aptitude.Service
 	log            *zap.Logger
 }
 
@@ -39,12 +41,14 @@ func NewStartHandler(
 	cultivationSvc cultivation.Service,
 	economySvc economy.Service,
 	inventorySvc inventory.Service,
+	aptitudeSvc aptitude.Service,
 ) *StartHandler {
 	return &StartHandler{
 		profileSvc:     profileSvc,
 		cultivationSvc: cultivationSvc,
 		economySvc:     economySvc,
 		inventorySvc:   inventorySvc,
+		aptitudeSvc:    aptitudeSvc,
 		log:            logger.L().Named("handler.start"),
 	}
 }
@@ -120,17 +124,24 @@ func (h *StartHandler) Handle(s *discordgo.Session, i *discordgo.InteractionCrea
 		h.log.Warn("/start: GetOrCreate wallet thất bại (không fatal)", zap.String("userId", userID), zap.Error(err))
 	}
 
-	// 4. Gửi thông báo chào mừng
+	// 4. Roll Tư Chất cho tân thủ
+	_, aptDef, _ := h.aptitudeSvc.RollForNewCharacter(ctx, userID)
+	aptName := "Phàm Tư"
+	if aptDef != nil {
+		aptName = aptDef.Name
+	}
+
+	// 5. Gửi thông báo chào mừng
 	embed := ui.SuccessEmbed(
 		"Chào Mừng Đến Với Vạn Pháp Tiên Nghịch!",
 		fmt.Sprintf(
 			"Đạo hữu **%s** đã bước vào thế giới tu tiên!\n\n"+
-				"• Đạo hiệu: **%s**\n"+
+				"• Cốt cách: **%s**\n"+
 				"• Cảnh giới khởi đầu: **%s tầng %d**\n"+
 				"• Linh thạch: **500**\n"+
 				"• Vé cơ duyên: **3**\n\n"+
 				"Hãy dùng `/menu` để bắt đầu hành trình!",
-			player.DaoName, player.DaoName, cult.Realm.DisplayName(), cult.RealmLevel,
+			player.DaoName, aptName, cult.Realm.DisplayName(), cult.RealmLevel,
 		),
 	)
 

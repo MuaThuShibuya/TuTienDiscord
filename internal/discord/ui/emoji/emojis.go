@@ -17,7 +17,7 @@ var (
 var (
 	Cultivate    = &Emoji{Key: "cultivate", Fallback: "🧘"}    // Tĩnh tu
 	Realm        = &Emoji{Key: "realm", Fallback: "🌟"}        // Cảnh giới
-	Breakthrough = &Emoji{Key: "breakthrough", Fallback: "⚡"}  // Đột phá
+	Breakthrough = &Emoji{Key: "breakthrough", Fallback: "⚡"} // Đột phá
 	Stamina      = &Emoji{Key: "stamina", Fallback: "💪"}      // Thể lực
 	MindState    = &Emoji{Key: "mind_state", Fallback: "🌸"}   // Tâm cảnh
 )
@@ -26,8 +26,16 @@ var (
 var (
 	Sword       = &Emoji{Key: "sword", Fallback: "⚔️"}       // Chiến đấu / Kiếm
 	CombatPower = &Emoji{Key: "combat_power", Fallback: "🔥"} // Chiến lực
-	PvP         = &Emoji{Key: "pvp", Fallback: "🥊"}         // PvP
-	Boss        = &Emoji{Key: "boss", Fallback: "🐉"}        // Boss server
+	PvP         = &Emoji{Key: "pvp", Fallback: "🥊"}          // PvP
+	Boss        = &Emoji{Key: "boss", Fallback: "🐉"}         // Boss server
+	Shield      = &Emoji{Key: "shield", Fallback: "🛡️"}      // Phòng thủ
+	Heart       = &Emoji{Key: "heart", Fallback: "❤️"}       // Máu (HP)
+	Monster     = &Emoji{Key: "monster", Fallback: "👹"}      // Quái vật
+	Map         = &Emoji{Key: "map", Fallback: "🗺️"}         // Bản đồ (Du Ngoạn)
+	Dungeon     = &Emoji{Key: "dungeon", Fallback: "🏯"}      // Bí Cảnh
+	Reward      = &Emoji{Key: "reward", Fallback: "🎁"}       // Phần thưởng
+	Auto        = &Emoji{Key: "auto", Fallback: "🤖"}         // Tự động
+	Escape      = &Emoji{Key: "escape", Fallback: "🏃"}       // Bỏ chạy
 )
 
 // --- Hồ sơ / Xã hội (Social) ---
@@ -35,40 +43,42 @@ var (
 	Profile = &Emoji{Key: "profile", Fallback: "👤"} // Hồ sơ người chơi
 	Sect    = &Emoji{Key: "sect", Fallback: "🏯"}    // Tông môn
 	Partner = &Emoji{Key: "partner", Fallback: "💕"} // Đạo lữ
-	NPC     = &Emoji{Key: "npc", Fallback: "🤖"}    // NPC
+	NPC     = &Emoji{Key: "npc", Fallback: "🤖"}     // NPC
 )
 
 // --- Túi đồ / Trang bị (Inventory & Equipment) ---
 var (
-	Bag   = &Emoji{Key: "bag", Fallback: "🎒"}   // Túi đồ
+	Bag   = &Emoji{Key: "bag", Fallback: "🎒"}    // Túi đồ
 	Equip = &Emoji{Key: "equip", Fallback: "🛡️"} // Trang bị
-	Skill = &Emoji{Key: "skill", Fallback: "📖"} // Kỹ năng / Công pháp
-	Pet   = &Emoji{Key: "pet", Fallback: "🐾"}   // Linh thú
+	Skill = &Emoji{Key: "skill", Fallback: "📖"}  // Kỹ năng / Công pháp
+	Pet   = &Emoji{Key: "pet", Fallback: "🐾"}    // Linh thú
 )
 
 // --- Luyện đan / Đặc biệt ---
 var (
 	Alchemy = &Emoji{Key: "alchemy", Fallback: "⚗️"} // Luyện đan
-	Quest   = &Emoji{Key: "quest", Fallback: "📜"}   // Nhiệm vụ
+	Quest   = &Emoji{Key: "quest", Fallback: "📜"}    // Nhiệm vụ
 )
 
 // --- Thị trường (Market) ---
 var (
-	Gacha   = &Emoji{Key: "gacha", Fallback: "🎰"}  // Cơ duyên / Gacha
-	Market  = &Emoji{Key: "market", Fallback: "🏪"} // Chợ trao đổi
+	Gacha   = &Emoji{Key: "gacha", Fallback: "🎰"}   // Cơ duyên / Gacha
+	Market  = &Emoji{Key: "market", Fallback: "🏪"}  // Chợ trao đổi
 	Auction = &Emoji{Key: "auction", Fallback: "🔨"} // Đấu giá
 )
 
 // --- Hệ thống (System) ---
 var (
 	Refresh = &Emoji{Key: "refresh", Fallback: "🔄"}  // Làm mới
-	Back    = &Emoji{Key: "back", Fallback: "◀️"}     // Quay lại
+	Check   = &Emoji{Key: "check", Fallback: "✅"}    // Dấu check
+	Cross   = &Emoji{Key: "cross", Fallback: "❌"}    // Dấu X
+	Back    = &Emoji{Key: "back", Fallback: "◀️"}    // Quay lại
 	Close   = &Emoji{Key: "close", Fallback: "✖️"}   // Đóng
 	Info    = &Emoji{Key: "info", Fallback: "ℹ️"}    // Thông tin
 	Success = &Emoji{Key: "success", Fallback: "✅"}  // Thành công
 	Warning = &Emoji{Key: "warning", Fallback: "⚠️"} // Cảnh báo
-	Error   = &Emoji{Key: "error", Fallback: "❌"}   // Lỗi
-	Lock    = &Emoji{Key: "lock", Fallback: "🔒"}    // Khoá (coming soon)
+	Error   = &Emoji{Key: "error", Fallback: "❌"}    // Lỗi
+	Lock    = &Emoji{Key: "lock", Fallback: "🔒"}     // Khoá (coming soon)
 )
 
 // All trả về toàn bộ emoji trong registry.
@@ -80,7 +90,7 @@ func All() []*Emoji {
 		// Tu luyện
 		Cultivate, Realm, Breakthrough, Stamina, MindState,
 		// Chiến đấu
-		Sword, CombatPower, PvP, Boss,
+		Sword, CombatPower, PvP, Boss, Shield, Heart, Monster, Map, Dungeon, Reward, Auto, Escape,
 		// Xã hội
 		Profile, Sect, Partner, NPC,
 		// Túi đồ / Trang bị
@@ -90,6 +100,6 @@ func All() []*Emoji {
 		// Thị trường
 		Gacha, Market, Auction,
 		// Hệ thống
-		Refresh, Back, Close, Info, Success, Warning, Error, Lock,
+		Refresh, Check, Cross, Back, Close, Info, Success, Warning, Error, Lock,
 	}
 }

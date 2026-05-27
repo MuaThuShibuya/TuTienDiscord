@@ -292,7 +292,7 @@ func (s *cultivationService) Breakthrough(ctx context.Context, in BreakthroughIn
 		return nil, apperrors.ErrInsufficientMindState
 	}
 
-	cost := CalculateBreakthroughCost(prof.RealmLevel)
+	cost := CalculateBreakthroughCost(string(prof.Realm), prof.RealmLevel)
 	baseRate := 0.60
 	mindBonus := float64(prof.MindState-50) * 0.005
 	realmPenalty := float64(prof.RealmLevel) * 0.01

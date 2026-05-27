@@ -3,7 +3,9 @@ package pvecombat
 
 import (
 	"context"
+	"errors"
 	"math/rand"
+	"strings"
 	"testing"
 	"time"
 
@@ -203,8 +205,20 @@ func TestStartPvECombat_RejectInvalidStats(t *testing.T) {
 	svc := newTestService(repo, stats, &fakePvEProvider{}, nil)
 	_, err := svc.StartPvECombat(context.Background(), "u1", "area_1")
 
-	if err != combat.ErrInvalidCombatStats {
-		t.Errorf("Mong đợi ErrInvalidCombatStats, nhận %v", err)
+	if err == nil {
+		t.Fatalf("Mong đợi lỗi invalid stats, nhưng không có lỗi")
+	}
+
+	if !errors.Is(err, combat.ErrInvalidCombatStats) {
+		t.Fatalf("Mong đợi ErrInvalidCombatStats, nhận %v", err)
+	}
+
+	msg := err.Error()
+	requiredParts := []string{"user=u1", "hp=0", "atk=0", "def=0", "speed=0", "cp=0"}
+	for _, part := range requiredParts {
+		if !strings.Contains(msg, part) {
+			t.Errorf("Error thiếu debug context %q: %v", part, msg)
+		}
 	}
 }
 

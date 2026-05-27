@@ -14,6 +14,7 @@ const (
 	PageInventory   Page = "inventory"   // Túi đồ
 	PageEquipment   Page = "equipment"   // Trang bị (v0.3)
 	PageAlchemy     Page = "alchemy"     // Luyện đan — TODO v0.4
+	PagePvE         Page = "pve"         // PvE — Du Ngoạn / Bí Cảnh
 	PageCombat      Page = "combat"      // Chiến đấu / PvP — TODO v0.5
 	PageSkills      Page = "skills"      // Kỹ năng / Công pháp — TODO v0.4
 	PagePets        Page = "pets"        // Linh thú — TODO v0.6
@@ -29,6 +30,7 @@ var parentPage = map[Page]Page{
 	PageInventory:   PageMain,
 	PageEquipment:   PageMain,
 	PageAlchemy:     PageMain,
+	PagePvE:         PageMain,
 	PageCombat:      PageMain,
 	PageSkills:      PageMain,
 	PagePets:        PageMain,

@@ -24,6 +24,7 @@ const (
 	DomainInventory   = "inventory"   // Túi đồ
 	DomainEquipment   = "equipment"   // Trang bị
 	DomainAlchemy     = "alchemy"     // Lò luyện đan
+	DomainPvE         = "pve"         // PvE Combat (Du Ngoạn / Bí Cảnh)
 	// TODO v0.3+: thêm domain khi xây dựng tính năng mới
 )
 
@@ -63,6 +64,16 @@ const (
 	ActionAlchemyCraft  = "craft"  // Luyện đan
 	ActionAlchemyView   = "view"   // Xem chi tiết đan dược
 	ActionAlchemyCancel = "cancel" // Hủy thao tác xem, quay lại
+
+	// PvE
+	ActionPvEMain    = "main"    // Menu tổng PvE
+	ActionPvEDuNgoan = "dungoan" // Mở menu Du Ngoạn
+	ActionPvEBiCanh  = "bicanh"  // Mở menu Bí Cảnh
+	ActionPvEStart   = "start"   // Bắt đầu ải
+	ActionPvEAttack  = "attack"  // Đánh thường
+	ActionPvESkill   = "skill"   // Dùng kỹ năng
+	ActionPvEClaim   = "claim"   // Nhận thưởng thắng trận
+	ActionPvEEscape  = "escape"  // Bỏ chạy
 )
 
 // ParsedID kết quả phân tích custom_id.

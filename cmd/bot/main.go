@@ -37,6 +37,14 @@ import (
 	profilepkg "github.com/whiskey/tu-tien-bot/internal/game/profile"
 
 	_ "github.com/whiskey/tu-tien-bot/internal/game/data/loader"
+
+	"github.com/bwmarrin/discordgo"
+	pvemenu "github.com/whiskey/tu-tien-bot/internal/discord/menu/pve"
+	aptitudepkg "github.com/whiskey/tu-tien-bot/internal/game/aptitude"
+	characterstatspkg "github.com/whiskey/tu-tien-bot/internal/game/characterstats"
+	combatpkg "github.com/whiskey/tu-tien-bot/internal/game/combat"
+	pvepkg "github.com/whiskey/tu-tien-bot/internal/game/pve"
+	pvecombatpkg "github.com/whiskey/tu-tien-bot/internal/game/pvecombat"
 )
 
 func main() {
@@ -107,6 +115,9 @@ func main() {
 	invRepo := inventorypkg.NewMongoRepository(db.DB())
 	equipRepo := equipmentpkg.NewMongoRepository(db.DB())
 	alchemyRepo := alchemypkg.NewMongoRepository(db.DB())
+	combatRepo := combatpkg.NewMongoRepository(db.DB())
+	pveProgRepo := pvepkg.NewMongoProgressRepository(db.DB())
+	aptitudeRepo := aptitudepkg.NewMongoRepository(db.DB())
 
 	// --- 5. Services (business logic) ---
 	profileSvc := profilepkg.NewService(profileRepo)
@@ -117,13 +128,38 @@ func main() {
 	equipSvc := equipmentpkg.NewService(equipRepo, itemRepo, inventorySvc)
 	sessionSvc := discordmenu.NewSessionService(sessionRepo)
 	alchemySvc := alchemypkg.NewService(alchemyRepo, inventorySvc)
+	aptitudeSvc := aptitudepkg.NewService(aptitudeRepo)
+	charStatsSvc := characterstatspkg.NewPipelineService(aptitudeSvc, cultivationSvc, equipSvc)
+
+	// Khởi tạo các services và adapter cho hệ thống Combat PvE
+	turnOrderSvc := combatpkg.NewTurnOrderService()
+	combatSvc, err := combatpkg.NewService(combatRepo, turnOrderSvc, nil)
+	if err != nil {
+		log.Fatal("Không khởi tạo được combat service", zap.Error(err))
+	}
+
+	pveProgSvc := pvepkg.NewProgressService(pveProgRepo)
+	statsProv := pvecombatpkg.NewStatsAdapter(charStatsSvc)
+	pveProv := pvecombatpkg.NewPvEAdapter(pveProgSvc)
+	grantSvc := pvecombatpkg.NewGrantAdapter(inventorySvc)
+
+	pveCombatSvc, err := pvecombatpkg.NewService(combatRepo, statsProv, pveProv, grantSvc, turnOrderSvc, nil)
+	if err != nil {
+		log.Fatal("Không khởi tạo được pvecombat service", zap.Error(err))
+	}
 
 	// --- 6. Handlers (Controllers) ---
-	startHandler := handlers.NewStartHandler(profileSvc, cultivationSvc, economySvc, inventorySvc)
+	startHandler := handlers.NewStartHandler(profileSvc, cultivationSvc, economySvc, inventorySvc, aptitudeSvc)
 	menuHandler := handlers.NewMenuHandler(cfg, profileSvc, cultivationSvc, economySvc, inventorySvc, equipSvc, alchemySvc, sessionSvc)
 
+	// --- PvE Menu Router ---
+	pveRouter := pvemenu.NewRouter(pveCombatSvc, combatSvc, pveProgRepo, log)
+	pveActionHandler := func(s *discordgo.Session, i *discordgo.Interaction, session *discordmenu.Session, action string, extra string) {
+		pveRouter.HandlePvEInteraction(s, i, session, action, extra)
+	}
+
 	// --- 7. Menu router ---
-	menuRouter := discordmenu.NewRouter(cfg, sessionSvc, cultivationSvc, inventorySvc, equipSvc, alchemySvc, menuHandler.PageLoaders())
+	menuRouter := discordmenu.NewRouter(cfg, sessionSvc, cultivationSvc, inventorySvc, equipSvc, alchemySvc, pveActionHandler, menuHandler.PageLoaders())
 
 	// --- 8. Discord top-level router ---
 	discordRouter := discord.NewRouter(startHandler, menuHandler, menuRouter)

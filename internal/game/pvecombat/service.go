@@ -104,10 +104,8 @@ func (s *Service) StartPvECombat(ctx context.Context, userID, areaID string) (*c
 		return nil, fmt.Errorf("không thể lấy chỉ số chiến đấu: %w", err)
 	}
 	if stats.MaxHP <= 0 {
-		return nil, combat.ErrInvalidCombatStats
-	}
-	if stats.Speed <= 0 {
-		stats.Speed = 100
+		debugInfo := fmt.Sprintf("invalid combat stats: user=%s hp=%d atk=%d def=%d speed=%d cp=%d. Đã kiểm tra qua CharacterStats Pipeline.", userID, stats.MaxHP, stats.ATK, stats.DEF, stats.Speed, stats.CombatPower)
+		return nil, fmt.Errorf("%w: %s", combat.ErrInvalidCombatStats, debugInfo)
 	}
 
 	// 3. Lấy thông tin Area và điều kiện
