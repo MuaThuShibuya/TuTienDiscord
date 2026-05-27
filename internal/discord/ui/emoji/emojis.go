@@ -79,6 +79,13 @@ var (
 	Warning = &Emoji{Key: "warning", Fallback: "⚠️"} // Cảnh báo
 	Error   = &Emoji{Key: "error", Fallback: "❌"}    // Lỗi
 	Lock    = &Emoji{Key: "lock", Fallback: "🔒"}     // Khoá (coming soon)
+
+	// --- Admin / Hệ thống Thiên Cơ ---
+	Admin    = &Emoji{Key: "admin", Fallback: "🛠️"}
+	Danger   = &Emoji{Key: "danger", Fallback: "☢️"}
+	Database = &Emoji{Key: "database", Fallback: "🗃️"}
+	Audit    = &Emoji{Key: "audit", Fallback: "📜"}
+	Migrate  = &Emoji{Key: "migrate", Fallback: "🧭"}
 )
 
 // All trả về toàn bộ emoji trong registry.
@@ -101,5 +108,7 @@ func All() []*Emoji {
 		Gacha, Market, Auction,
 		// Hệ thống
 		Refresh, Check, Cross, Back, Close, Info, Success, Warning, Error, Lock,
+		// Admin
+		Admin, Danger, Database, Audit, Migrate,
 	}
 }

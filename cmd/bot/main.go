@@ -39,7 +39,9 @@ import (
 	_ "github.com/whiskey/tu-tien-bot/internal/game/data/loader"
 
 	"github.com/bwmarrin/discordgo"
+	adminmenu "github.com/whiskey/tu-tien-bot/internal/discord/menu/admin"
 	pvemenu "github.com/whiskey/tu-tien-bot/internal/discord/menu/pve"
+	gameadminpkg "github.com/whiskey/tu-tien-bot/internal/game/admin"
 	aptitudepkg "github.com/whiskey/tu-tien-bot/internal/game/aptitude"
 	characterstatspkg "github.com/whiskey/tu-tien-bot/internal/game/characterstats"
 	combatpkg "github.com/whiskey/tu-tien-bot/internal/game/combat"
@@ -148,6 +150,9 @@ func main() {
 		log.Fatal("Không khởi tạo được pvecombat service", zap.Error(err))
 	}
 
+	// --- Admin Service ---
+	adminSvc := gameadminpkg.NewService(db.DB(), log)
+
 	// --- 6. Handlers (Controllers) ---
 	startHandler := handlers.NewStartHandler(profileSvc, cultivationSvc, economySvc, inventorySvc, aptitudeSvc)
 	menuHandler := handlers.NewMenuHandler(cfg, profileSvc, cultivationSvc, economySvc, inventorySvc, equipSvc, alchemySvc, sessionSvc)
@@ -158,8 +163,14 @@ func main() {
 		pveRouter.HandlePvEInteraction(s, i, session, action, extra)
 	}
 
+	// --- Admin Menu Router ---
+	adminRouter := adminmenu.NewRouter(cfg, adminSvc, log)
+	adminActionHandler := func(s *discordgo.Session, i *discordgo.Interaction, session *discordmenu.Session, action string, extra string) {
+		adminRouter.HandleAdminInteraction(s, i, session, action, extra)
+	}
+
 	// --- 7. Menu router ---
-	menuRouter := discordmenu.NewRouter(cfg, sessionSvc, cultivationSvc, inventorySvc, equipSvc, alchemySvc, pveActionHandler, menuHandler.PageLoaders())
+	menuRouter := discordmenu.NewRouter(cfg, sessionSvc, cultivationSvc, inventorySvc, equipSvc, alchemySvc, pveActionHandler, adminActionHandler, menuHandler.PageLoaders())
 
 	// --- 8. Discord top-level router ---
 	discordRouter := discord.NewRouter(startHandler, menuHandler, menuRouter)

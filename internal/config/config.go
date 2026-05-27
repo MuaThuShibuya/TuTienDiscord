@@ -27,9 +27,10 @@ type Config struct {
 
 // AppConfig — thông tin chung của ứng dụng.
 type AppConfig struct {
-	Env     string
-	Name    string
-	Version string
+	Env                 string
+	Name                string
+	Version             string
+	AllowDangerousAdmin bool
 }
 
 // DiscordConfig — cấu hình Discord bot.
@@ -80,6 +81,28 @@ type ServerConfig struct {
 	KeepaliveIntervalSecs int // giây giữa các lần ping, mặc định 600 (10 phút)
 }
 
+// IsOwner kiểm tra xem userID có phải là owner không (truy cập nhanh từ root config).
+func (c *Config) IsOwner(userID string) bool {
+	if c == nil {
+		return false
+	}
+	return c.Discord.IsOwner(userID)
+}
+
+// CanExecuteDangerZone kiểm tra môi trường có cho phép Wipe/Reset toàn server không.
+func (c *Config) CanExecuteDangerZone() bool {
+	if c == nil {
+		return false
+	}
+	if len(c.Discord.OwnerIDs) == 0 {
+		return false
+	}
+	if c.App.Env == "production" && !c.App.AllowDangerousAdmin {
+		return false
+	}
+	return true
+}
+
 // Load đọc và validate cấu hình từ biến môi trường.
 // Trả về lỗi nếu thiếu biến bắt buộc.
 func Load() (*Config, error) {
@@ -89,6 +112,7 @@ func Load() (*Config, error) {
 	cfg.App.Env = getEnv("APP_ENV", "development")
 	cfg.App.Name = getEnv("APP_NAME", "tu-tien-discord-bot")
 	cfg.App.Version = getEnv("APP_VERSION", "0.1.1")
+	cfg.App.AllowDangerousAdmin = getEnvBool("ALLOW_DANGEROUS_ADMIN", false)
 
 	// Discord — bắt buộc
 	token, err := requireEnv("DISCORD_TOKEN")

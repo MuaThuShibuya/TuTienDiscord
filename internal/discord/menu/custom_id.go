@@ -25,6 +25,7 @@ const (
 	DomainEquipment   = "equipment"   // Trang bị
 	DomainAlchemy     = "alchemy"     // Lò luyện đan
 	DomainPvE         = "pve"         // PvE Combat (Du Ngoạn / Bí Cảnh)
+	DomainAdmin       = "admin"       // Thiên Cơ Các (Owner Admin)
 	// TODO v0.3+: thêm domain khi xây dựng tính năng mới
 )
 
@@ -75,6 +76,13 @@ const (
 	ActionPvEAuto    = "auto"    // Tự động đánh
 	ActionPvEClaim   = "claim"   // Nhận thưởng thắng trận
 	ActionPvEEscape  = "escape"  // Bỏ chạy
+
+	// Admin
+	ActionAdminMain          = "main"
+	ActionAdminMigrateDryRun = "migrate_dry"
+	ActionAdminMigrateModal  = "migrate_modal" // Mở form confirm
+	ActionAdminMigrateApply  = "migrate_apply" // Xử lý submit form
+	ActionAdminSelectMenu    = "select_menu"
 )
 
 // ParsedID kết quả phân tích custom_id.

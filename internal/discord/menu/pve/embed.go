@@ -73,10 +73,11 @@ func BuildCombatEmbed(vm CombatViewModel) *discordgo.MessageEmbed {
 	embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{Name: "Diễn Biến Trận Đấu", Value: logStr, Inline: false})
 
 	// Footer Status
-	if vm.State == combat.StateWon {
+	switch vm.State {
+	case combat.StateWon:
 		embed.Color = ui.ColorSuccess
 		embed.Description = "🎉 **CHIẾN THẮNG!** Đạo hữu đã chém giết yêu ma, thiên địa trở lại thanh minh."
-	} else if vm.State == combat.StateLost {
+	case combat.StateLost:
 		embed.Color = ui.ColorError
 		embed.Description = "💀 **THẤT BẠI!** Đạo thể trọng thương, linh khí cạn kiệt. Hãy tĩnh tu thêm rồi quay lại."
 	}

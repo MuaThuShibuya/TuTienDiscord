@@ -41,6 +41,7 @@ type Router struct {
 	equipSvc       equipment.Service
 	alchemySvc     alchemy.Service
 	pveHandler     func(s *discordgo.Session, i *discordgo.Interaction, session *Session, action, extra string)
+	adminHandler   func(s *discordgo.Session, i *discordgo.Interaction, session *Session, action, extra string)
 	pageLoaders    map[Page]PageLoader
 	log            *zap.Logger
 }
@@ -54,6 +55,7 @@ func NewRouter(
 	equipSvc equipment.Service,
 	alchemySvc alchemy.Service,
 	pveHandler func(s *discordgo.Session, i *discordgo.Interaction, session *Session, action, extra string),
+	adminHandler func(s *discordgo.Session, i *discordgo.Interaction, session *Session, action, extra string),
 	loaders map[Page]PageLoader,
 ) *Router {
 	return &Router{
@@ -64,6 +66,7 @@ func NewRouter(
 		equipSvc:       equipSvc,
 		alchemySvc:     alchemySvc,
 		pveHandler:     pveHandler,
+		adminHandler:   adminHandler,
 		pageLoaders:    loaders,
 		log:            logger.L().Named("menu.router"),
 	}
@@ -72,11 +75,15 @@ func NewRouter(
 // Handle phân luồng một Discord component interaction đến handler phù hợp.
 // Luôn defer trước để tránh timeout 3 giây, sau đó xử lý và edit response.
 func (r *Router) Handle(s *discordgo.Session, i *discordgo.Interaction) {
-	if i.Type != discordgo.InteractionMessageComponent {
+	var customID string
+	switch i.Type {
+	case discordgo.InteractionMessageComponent:
+		customID = i.MessageComponentData().CustomID
+	case discordgo.InteractionModalSubmit:
+		customID = i.ModalSubmitData().CustomID
+	default:
 		return
 	}
-
-	customID := i.MessageComponentData().CustomID
 
 	// Phân tích custom_id — nếu lỗi format, trả về lỗi ngay (chưa defer, dùng Respond thường)
 	parsed, err := Parse(customID)
@@ -141,6 +148,10 @@ func (r *Router) Handle(s *discordgo.Session, i *discordgo.Interaction) {
 	case DomainPvE:
 		if r.pveHandler != nil {
 			r.pveHandler(s, i, session, parsed.Action, parsed.Extra)
+		}
+	case DomainAdmin:
+		if r.adminHandler != nil {
+			r.adminHandler(s, i, session, parsed.Action, parsed.Extra)
 		}
 	default:
 		r.log.Warn("domain không xác định",
