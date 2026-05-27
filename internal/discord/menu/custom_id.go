@@ -72,6 +72,7 @@ const (
 	ActionPvEStart   = "start"   // Bắt đầu ải
 	ActionPvEAttack  = "attack"  // Đánh thường
 	ActionPvESkill   = "skill"   // Dùng kỹ năng
+	ActionPvEAuto    = "auto"    // Tự động đánh
 	ActionPvEClaim   = "claim"   // Nhận thưởng thắng trận
 	ActionPvEEscape  = "escape"  // Bỏ chạy
 )

@@ -57,9 +57,13 @@ func BuildCombatEmbed(vm CombatViewModel) *discordgo.MessageEmbed {
 		if e.IsDead {
 			icon = emoji.Cross.String()
 		}
-		enemyStrs = append(enemyStrs, fmt.Sprintf("%s **%s** (Lv.%d)\n%s", icon, e.Name, e.Level, e.HPStr))
+		targetMark := ""
+		if vm.TargetID == e.ID && !e.IsDead {
+			targetMark = " " + emoji.Sword.String() + " *(Mục tiêu)*"
+		}
+		enemyStrs = append(enemyStrs, fmt.Sprintf("%s **%s** (Lv.%d)%s\n%s", icon, e.Name, e.Level, targetMark, e.HPStr))
 	}
-	embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{Name: "Kẻ Địch", Value: strings.Join(enemyStrs, "\n\n"), Inline: false})
+	embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{Name: "Kẻ Địch Yêu Khí", Value: strings.Join(enemyStrs, "\n\n"), Inline: false})
 
 	// Battle Log
 	logStr := "*Chưa có động tĩnh gì.*"
@@ -71,8 +75,10 @@ func BuildCombatEmbed(vm CombatViewModel) *discordgo.MessageEmbed {
 	// Footer Status
 	if vm.State == combat.StateWon {
 		embed.Color = ui.ColorSuccess
+		embed.Description = "🎉 **CHIẾN THẮNG!** Đạo hữu đã chém giết yêu ma, thiên địa trở lại thanh minh."
 	} else if vm.State == combat.StateLost {
 		embed.Color = ui.ColorError
+		embed.Description = "💀 **THẤT BẠI!** Đạo thể trọng thương, linh khí cạn kiệt. Hãy tĩnh tu thêm rồi quay lại."
 	}
 	return embed
 }

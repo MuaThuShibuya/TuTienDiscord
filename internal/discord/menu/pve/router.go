@@ -30,6 +30,31 @@ func NewRouter(pvecombatSvc *pvecombat.Service, combatSvc *combat.Service, pveRe
 	return &Router{pvecombatSvc: pvecombatSvc, combatSvc: combatSvc, pveRepo: pveRepo, log: log.Named("menu.pve")}
 }
 
+// formatCombatError dịch lỗi backend sang UI tu tiên
+func formatCombatError(err error) string {
+	if errors.Is(err, combat.ErrNotYourTurn) {
+		return "Thiên đạo chưa xoay tới lượt đạo hữu. Hãy chờ khí cơ ổn định."
+	}
+	if errors.Is(err, combat.ErrTargetAlreadyDead) {
+		return "Yêu vật này đã tan biến, không thể truy kích thêm."
+	}
+	if errors.Is(err, combat.ErrInvalidCombatStats) {
+		return fmt.Sprintf("Đạo thể bất ổn, chỉ số chiến đấu không hợp lệ.\n*Debug: %v*", err)
+	}
+	if errors.Is(err, combat.ErrRewardAlreadyClaimed) {
+		return "Đạo hữu đã gom sạch thiên tài địa bảo nơi này rồi, không còn gì sót lại."
+	}
+	if errors.Is(err, combat.ErrRewardSessionNotWon) {
+		return "Yêu ma chưa dẹp yên, làm sao có thể tranh đoạt cơ duyên?"
+	}
+	if errors.Is(err, combat.ErrCombatSessionNotFound) || errors.Is(err, combat.ErrCombatSessionExpired) {
+		return "Cơ duyên đã tàn, linh khí nơi này đã tản đi. Hãy mở lại một chuyến du ngoạn mới."
+	}
+
+	// Lỗi Generic
+	return fmt.Sprintf("Linh mạch dao động, pháp trận tạm thời bất ổn. Hãy thử lại sau.\n*Debug: %v*", err)
+}
+
 func (r *Router) HandlePvEInteraction(s *discordgo.Session, i *discordgo.Interaction, menuSession *menu.Session, action, extra string) {
 	ctx := context.Background()
 	userID := menuSession.UserID
@@ -66,14 +91,22 @@ func (r *Router) HandlePvEInteraction(s *discordgo.Session, i *discordgo.Interac
 
 		cSession, err := r.combatSvc.PlayerBasicAttack(ctx, userID, combatSessionID, targetID, idempotencyKey)
 		if err != nil {
-			if errors.Is(err, combat.ErrNotYourTurn) || errors.Is(err, combat.ErrTargetAlreadyDead) {
-				ui.RespondEphemeralWarning(s, i, err.Error())
-			} else {
-				ui.EditEphemeralError(s, i, err.Error())
-			}
+			ui.EditEphemeralEmbed(s, i, ui.WarningEmbed(formatCombatError(err)))
 			return
 		}
 		r.renderCombatScreen(s, i, menuSession, cSession)
+
+	case menu.ActionPvESkill:
+		ui.EditEphemeralEmbed(s, i, ui.WarningEmbed("Công pháp chưa khai mở, đạo hữu hãy tạm dùng kiếm pháp căn cơ."))
+		return
+
+	case menu.ActionPvEAuto:
+		ui.EditEphemeralEmbed(s, i, ui.WarningEmbed("Thần thức tự chiến chưa ổn định, cần hoàn thiện cảnh giới cao hơn."))
+		return
+
+	case menu.ActionPvEEscape:
+		ui.EditEphemeralEmbed(s, i, ui.WarningEmbed("Độn thuật đang được nghiên cứu, hiện tại chỉ có tử chiến tới cùng!"))
+		return
 
 	case menu.ActionPvEClaim:
 		combatSessionID := extra
@@ -81,7 +114,7 @@ func (r *Router) HandlePvEInteraction(s *discordgo.Session, i *discordgo.Interac
 
 		claimed, err := r.pvecombatSvc.ClaimReward(ctx, userID, combatSessionID, idempotencyKey)
 		if err != nil {
-			ui.EditEphemeralError(s, i, fmt.Sprintf("Nhận thưởng thất bại: %v", err))
+			ui.EditEphemeralEmbed(s, i, ui.WarningEmbed(formatCombatError(err)))
 			return
 		}
 

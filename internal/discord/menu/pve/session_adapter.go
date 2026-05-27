@@ -3,14 +3,31 @@ package pve
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/whiskey/tu-tien-bot/internal/game/combat"
 )
 
-// BuildHPBar sinh ra thanh HP trực quan (10 blocks).
+// FormatNumber thêm dấu phẩy phân cách hàng nghìn.
+func FormatNumber(n int64) string {
+	in := fmt.Sprintf("%d", n)
+	out := make([]byte, len(in)+(len(in)-1)/3)
+	for i, j, k := len(in)-1, len(out)-1, 0; i >= 0; i, j = i-1, j-1 {
+		out[j] = in[i]
+		k++
+		if k == 3 && i > 0 {
+			j--
+			out[j] = ','
+			k = 0
+		}
+	}
+	return string(out)
+}
+
+// BuildHPBar sinh ra thanh HP trực quan (10 blocks) kèm phần trăm và text.
 func BuildHPBar(current, max int64) string {
 	if max <= 0 {
-		return "🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩 0/0"
+		return "`🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥` 0% (0/0)"
 	}
 	if current < 0 {
 		current = 0
@@ -20,20 +37,14 @@ func BuildHPBar(current, max int64) string {
 	}
 
 	percent := float64(current) / float64(max)
-	filled := int(percent * 10)
+	percentInt := int(percent * 100)
+	filled := int(percentInt / 10)
 	if current > 0 && filled == 0 {
 		filled = 1 // Vẫn còn sống thì ít nhất 1 vạch
 	}
 
-	bar := ""
-	for i := 0; i < 10; i++ {
-		if i < filled {
-			bar += "🟩"
-		} else {
-			bar += "🟥"
-		}
-	}
-	return fmt.Sprintf("`%s` %d/%d", bar, current, max)
+	bar := strings.Repeat("🟩", filled) + strings.Repeat("🟥", 10-filled)
+	return fmt.Sprintf("`%s` **%d%%** (%s/%s)", bar, percentInt, FormatNumber(current), FormatNumber(max))
 }
 
 func CombatSessionToViewModel(session *combat.CombatSession, areaName string) CombatViewModel {

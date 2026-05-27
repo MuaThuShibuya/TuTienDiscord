@@ -41,20 +41,26 @@ func BuildCombatActionComponents(menuSessionID string, vm CombatViewModel) []dis
 		}
 	}
 
+	// Nút quay lại dành cho màn thua hoặc cần lối thoát an toàn
+	backBtn := ui.Button("Rời Khỏi", menu.Build(menu.DomainNav, menu.ActionRefresh, menuSessionID, string(menu.PagePvE)), ui.BtnSecondary, emoji.Escape, false)
+
 	if vm.State == combat.StateLost {
-		return []discordgo.MessageComponent{
-			ui.ActionRow(ui.Button("Rời Khỏi (Thất Bại)", menu.Build(menu.DomainNav, menu.ActionRefresh, menuSessionID, string(menu.PagePvE)), ui.BtnSecondary, emoji.Back, false)),
-		}
+		return []discordgo.MessageComponent{ui.ActionRow(backBtn)}
 	}
 
-	// Đang đánh
-	// Truyền TargetID và Interaction ID (sẽ tự gen nonce) vào Extra
+	// Đang đánh (StateOngoing)
+	// Truyền SessionID và TargetID. Nonce sẽ được lấy từ Discord Interaction ID ở Router.
 	attackID := menu.Build(menu.DomainPvE, menu.ActionPvEAttack, menuSessionID, vm.SessionID+"|"+vm.TargetID)
+	skillID := menu.Build(menu.DomainPvE, menu.ActionPvESkill, menuSessionID, vm.SessionID)
+	autoID := menu.Build(menu.DomainPvE, menu.ActionPvEAuto, menuSessionID, vm.SessionID)
+	escapeID := menu.Build(menu.DomainPvE, menu.ActionPvEEscape, menuSessionID, vm.SessionID)
+
 	return []discordgo.MessageComponent{
 		ui.ActionRow(
 			ui.Button("Tấn Công", attackID, ui.BtnPrimary, emoji.Sword, !vm.IsPlayerTurn),
-			ui.Button("Kỹ Năng", "none_skill", ui.BtnSecondary, emoji.Skill, true), // TODO: Block sau
-			ui.Button("Bỏ Chạy", "none_escape", ui.BtnDanger, emoji.Escape, true),  // TODO: pvecombat.Escape
+			ui.Button("Kỹ Năng", skillID, ui.BtnPrimary, emoji.Skill, !vm.IsPlayerTurn),
+			ui.Button("Tự Động", autoID, ui.BtnSuccess, emoji.Auto, !vm.IsPlayerTurn),
+			ui.Button("Bỏ Chạy", escapeID, ui.BtnDanger, emoji.Escape, false),
 		),
 	}
 }
