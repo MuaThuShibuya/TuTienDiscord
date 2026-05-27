@@ -104,5 +104,10 @@ func (s *adminSvc) ApplyMigration(ctx context.Context, adminID string) (string, 
 		Details:     map[string]interface{}{"realmsFixed": totalUpdated, "combatsCleared": res3.DeletedCount},
 	})
 
+	s.log.Info("Áp dụng Migration thành công",
+		zap.String("adminUserId", adminID),
+		zap.Int64("realmsFixed", totalUpdated),
+		zap.Int64("combatsCleared", res3.DeletedCount),
+	)
 	return report, nil
 }

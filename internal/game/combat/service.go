@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/whiskey/tu-tien-bot/internal/apperrors"
+	"go.uber.org/zap"
 )
 
 type Service struct {
@@ -19,12 +20,14 @@ type Service struct {
 	calc      Calculator
 	rng       *rand.Rand
 	now       func() time.Time
+	log       *zap.Logger
 }
 
 func NewService(
 	repo Repository,
 	turnOrder *TurnOrderService,
 	rng *rand.Rand,
+	log *zap.Logger,
 ) (*Service, error) {
 	if repo == nil {
 		return nil, errors.New("combat repo cannot be nil")
@@ -35,6 +38,9 @@ func NewService(
 	if rng == nil {
 		rng = rand.New(rand.NewSource(time.Now().UnixNano()))
 	}
+	if log == nil {
+		return nil, errors.New("logger cannot be nil")
+	}
 
 	return &Service{
 		repo:      repo,
@@ -42,6 +48,7 @@ func NewService(
 		calc:      NewDamageCalculator(),
 		rng:       rng,
 		now:       time.Now,
+		log:       log.Named("game.combat"),
 	}, nil
 }
 
@@ -110,6 +117,16 @@ func (s *Service) PlayerBasicAttack(ctx context.Context, userID, sessionID, targ
 		msg += " Mục tiêu đã bị hạ gục!"
 	}
 	session.AppendLog(CombatLogEntry{Turn: session.Turn, ActorID: session.Player.ID, Action: "attack", Message: msg, Damage: dmgRes.Damage, IsCrit: dmgRes.IsCrit, CreatedAt: s.now().UTC()})
+
+	s.log.Info("Player Basic Attack",
+		zap.String("userId", userID),
+		zap.String("sessionId", sessionID),
+		zap.String("targetId", targetID),
+		zap.Int64("damage", dmgRes.Damage),
+		zap.Bool("isCrit", dmgRes.IsCrit),
+		zap.Int64("targetHpAfter", session.Enemies[enemyIdx].CurrentHP),
+		zap.String("idempotencyKey", idempotencyKey),
+	)
 
 	// Check Win
 	if session.AreAllEnemiesDead() {

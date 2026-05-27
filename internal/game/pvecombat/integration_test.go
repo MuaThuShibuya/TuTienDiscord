@@ -11,6 +11,7 @@ import (
 
 	"github.com/whiskey/tu-tien-bot/internal/game/combat"
 	"github.com/whiskey/tu-tien-bot/internal/game/pve"
+	"go.uber.org/zap"
 )
 
 // --- Fake Services Dành Cho Integration ---
@@ -83,7 +84,7 @@ func setupIntegrationEnv() (*Service, *fakeGrantService, *fakeRepo, *integration
 	pveProv := &integrationPvEProvider{}
 	statsProv := &fakeStatsProvider{stats: combat.CombatStats{MaxHP: 1000, Speed: 100}}
 
-	svc, _ := NewService(repo, statsProv, pveProv, grantSvc, combat.NewTurnOrderService(), rand.New(rand.NewSource(1)))
+	svc, _ := NewService(repo, statsProv, pveProv, grantSvc, combat.NewTurnOrderService(), rand.New(rand.NewSource(1)), zap.NewNop())
 	return svc, grantSvc, repo, pveProv
 }
 

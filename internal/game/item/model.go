@@ -10,10 +10,11 @@ import (
 type ItemType string
 
 const (
-	TypeMaterial  ItemType = "material"
-	TypePill      ItemType = "pill"
-	TypeEquipment ItemType = "equipment"
-	TypeFurnace   ItemType = "furnace"
+	TypeMaterial    ItemType = "material"
+	TypePill        ItemType = "pill"
+	TypeEquipment   ItemType = "equipment"
+	TypeFurnace     ItemType = "furnace"
+	TypeSkillScroll ItemType = "skill_scroll"
 )
 
 type ItemRarity string

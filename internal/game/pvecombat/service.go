@@ -13,6 +13,7 @@ import (
 	"github.com/whiskey/tu-tien-bot/internal/apperrors"
 	"github.com/whiskey/tu-tien-bot/internal/game/combat"
 	"github.com/whiskey/tu-tien-bot/internal/game/pve"
+	"go.uber.org/zap"
 )
 
 // StatsProvider cung cấp chỉ số người chơi từ Equipment hoặc Profile service.
@@ -44,6 +45,7 @@ type Service struct {
 	turnOrder     *combat.TurnOrderService
 	rng           *rand.Rand
 	now           func() time.Time
+	log           *zap.Logger
 }
 
 func NewService(
@@ -53,6 +55,7 @@ func NewService(
 	grantService RewardGrantService,
 	turnOrder *combat.TurnOrderService,
 	rng *rand.Rand,
+	log *zap.Logger,
 ) (*Service, error) {
 	if repo == nil {
 		return nil, errors.New("combat repo cannot be nil")
@@ -72,6 +75,9 @@ func NewService(
 	if rng == nil {
 		rng = rand.New(rand.NewSource(time.Now().UnixNano()))
 	}
+	if log == nil {
+		return nil, errors.New("logger cannot be nil")
+	}
 
 	return &Service{
 		repo:          repo,
@@ -81,6 +87,7 @@ func NewService(
 		turnOrder:     turnOrder,
 		rng:           rng,
 		now:           time.Now,
+		log:           log.Named("game.pvecombat"),
 	}, nil
 }
 
@@ -105,6 +112,7 @@ func (s *Service) StartPvECombat(ctx context.Context, userID, areaID string) (*c
 	}
 	if stats.MaxHP <= 0 {
 		debugInfo := fmt.Sprintf("invalid combat stats: user=%s hp=%d atk=%d def=%d speed=%d cp=%d. Đã kiểm tra qua CharacterStats Pipeline.", userID, stats.MaxHP, stats.ATK, stats.DEF, stats.Speed, stats.CombatPower)
+		s.log.Warn("Từ chối tạo trận do chỉ số lỗi", zap.String("userId", userID), zap.Any("stats", stats))
 		return nil, fmt.Errorf("%w: %s", combat.ErrInvalidCombatStats, debugInfo)
 	}
 
@@ -212,6 +220,14 @@ func (s *Service) StartPvECombat(ctx context.Context, userID, areaID string) (*c
 		return nil, err
 	}
 
+	s.log.Info("Tạo trận PvE thành công",
+		zap.String("userId", userID),
+		zap.String("areaId", areaID),
+		zap.String("activityType", string(area.ActivityType)),
+		zap.Int("stage", stage),
+		zap.String("sessionId", sessionID),
+		zap.Int("enemyCount", len(enemies)),
+	)
 	return session, nil
 }
 
@@ -256,14 +272,17 @@ func (s *Service) ClaimReward(ctx context.Context, userID, sessionID, idempotenc
 			switch r.Type {
 			case "exp":
 				if err := s.grantService.GrantExp(ctx, userID, r.Quantity); err != nil {
+					s.log.Error("Lỗi trao Exp", zap.String("userId", userID), zap.Error(err))
 					return err
 				}
 			case "stones":
 				if err := s.grantService.GrantStones(ctx, userID, r.Quantity); err != nil {
+					s.log.Error("Lỗi trao Linh Thạch", zap.String("userId", userID), zap.Error(err))
 					return err
 				}
 			default:
 				if err := s.grantService.GrantItem(ctx, userID, r.RefID, r.Quantity); err != nil {
+					s.log.Error("Lỗi trao Item", zap.String("userId", userID), zap.String("poolId", session.GuaranteedRewardPoolID), zap.String("refId", r.RefID), zap.Error(err))
 					return err
 				}
 			}
@@ -295,5 +314,12 @@ func (s *Service) ClaimReward(ctx context.Context, userID, sessionID, idempotenc
 		return nil, err
 	}
 
+	s.log.Info("Nhận thưởng PvE thành công",
+		zap.String("userId", userID),
+		zap.String("sessionId", sessionID),
+		zap.Int("stage", session.Stage),
+		zap.Int("totalRewards", len(claimed)),
+		zap.String("idempotencyKey", idempotencyKey),
+	)
 	return claimed, nil
 }

@@ -12,6 +12,7 @@ import (
 	"github.com/whiskey/tu-tien-bot/internal/apperrors"
 	"github.com/whiskey/tu-tien-bot/internal/game/combat"
 	"github.com/whiskey/tu-tien-bot/internal/game/pve"
+	"go.uber.org/zap"
 )
 
 // --- Fakes ---
@@ -134,7 +135,7 @@ func newTestService(
 		grantSvc = &fakeRewardGrantService{}
 	}
 
-	svc, err := NewService(repo, stats, pveProv, grantSvc, combat.NewTurnOrderService(), rand.New(rand.NewSource(1)))
+	svc, err := NewService(repo, stats, pveProv, grantSvc, combat.NewTurnOrderService(), rand.New(rand.NewSource(1)), zap.NewNop())
 	if err != nil {
 		panic(err)
 	}

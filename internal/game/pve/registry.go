@@ -86,7 +86,7 @@ var RewardPoolRegistry = map[string]RewardPoolDefinition{
 		Entries: []RewardEntry{
 			{Type: "material", RefID: "mat_enhance_hac_thiet_d", MinQuantity: 1, MaxQuantity: 5, Chance: 1.0, Weight: 80},
 			{Type: "equipment", RefID: "eq_weapon_moc_kiem_d", MinQuantity: 1, MaxQuantity: 1, Chance: 1.0, Weight: 15, Rarity: "D"},
-			{Type: "skill_scroll", RefID: "skill_than_hanh_bo", MinQuantity: 1, MaxQuantity: 1, Chance: 1.0, Weight: 5, Rarity: "A", IsUnique: true},
+			{Type: "skill_scroll", RefID: "scroll_skill_than_hanh_bo", MinQuantity: 1, MaxQuantity: 1, Chance: 1.0, Weight: 5, Rarity: "A", IsUnique: true},
 		},
 	},
 	"reward_bi_canh_rare": {
@@ -96,9 +96,9 @@ var RewardPoolRegistry = map[string]RewardPoolDefinition{
 			{Type: "exp", MinQuantity: 50, MaxQuantity: 200, Chance: 1.0},
 			{Type: "stones", MinQuantity: 20, MaxQuantity: 100, Chance: 1.0},
 			{Type: "material", RefID: "mat_rare_tinh_thiet", MinQuantity: 1, MaxQuantity: 3, Chance: 0.5},
-			{Type: "equipment", RefID: "eq_weapon_huyet_kiem", Chance: 0.05, Rarity: "A", IsUnique: true},
-			{Type: "artifact", RefID: "art_guong_bat_quai", Chance: 0.01, Rarity: "S", IsUnique: true},
-			{Type: "skill_scroll", RefID: "skill_huyet_sat", Chance: 0.02, Rarity: "A", IsUnique: true},
+			{Type: "equipment", RefID: "eq_weapon_huyet_kiem", MinQuantity: 1, MaxQuantity: 1, Chance: 0.05, Rarity: "A", IsUnique: true},
+			{Type: "artifact", RefID: "eq_artifact_guong_bat_quai", MinQuantity: 1, MaxQuantity: 1, Chance: 0.01, Rarity: "S", IsUnique: true},
+			{Type: "skill_scroll", RefID: "scroll_skill_huyet_sat", MinQuantity: 1, MaxQuantity: 1, Chance: 0.02, Rarity: "A", IsUnique: true},
 		},
 	},
 	"reward_bi_canh_bonus": {
@@ -107,8 +107,8 @@ var RewardPoolRegistry = map[string]RewardPoolDefinition{
 		Entries: []RewardEntry{
 			{Type: "material", RefID: "mat_rare_tinh_thiet", MinQuantity: 3, MaxQuantity: 5, Chance: 1.0, Weight: 50},
 			{Type: "equipment", RefID: "eq_weapon_huyet_kiem", MinQuantity: 1, MaxQuantity: 1, Chance: 1.0, Weight: 30, Rarity: "A"},
-			{Type: "artifact", RefID: "art_guong_bat_quai", MinQuantity: 1, MaxQuantity: 1, Chance: 1.0, Weight: 10, Rarity: "S", IsUnique: true},
-			{Type: "skill_scroll", RefID: "skill_huyet_sat", MinQuantity: 1, MaxQuantity: 1, Chance: 1.0, Weight: 10, Rarity: "A", IsUnique: true},
+			{Type: "artifact", RefID: "eq_artifact_guong_bat_quai", MinQuantity: 1, MaxQuantity: 1, Chance: 1.0, Weight: 10, Rarity: "S", IsUnique: true},
+			{Type: "skill_scroll", RefID: "scroll_skill_huyet_sat", MinQuantity: 1, MaxQuantity: 1, Chance: 1.0, Weight: 10, Rarity: "A", IsUnique: true},
 		},
 	},
 }

@@ -50,6 +50,9 @@ func formatCombatError(err error) string {
 	if errors.Is(err, combat.ErrCombatSessionNotFound) || errors.Is(err, combat.ErrCombatSessionExpired) {
 		return "Cơ duyên đã tàn, linh khí nơi này đã tản đi. Hãy mở lại một chuyến du ngoạn mới."
 	}
+	if errors.Is(err, combat.ErrRewardGrantFailed) || strings.Contains(err.Error(), "vật phẩm không tồn tại") || strings.Contains(err.Error(), "tồn tại") {
+		return fmt.Sprintf("Thiên tài địa bảo nơi này chưa được Thiên Cơ Các ghi vào bảo lục. Hãy báo lại cho chưởng quản.\n*Debug: %v*", err)
+	}
 
 	// Lỗi Generic
 	return fmt.Sprintf("Linh mạch dao động, pháp trận tạm thời bất ổn. Hãy thử lại sau.\n*Debug: %v*", err)

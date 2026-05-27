@@ -30,10 +30,22 @@ func (r *Router) CheckOwner(userID string) bool {
 	return r.cfg.IsOwner(userID)
 }
 
+// ValidateAdminAction xác minh tính hợp lệ và bảo mật của hành động trước khi gọi service
+func ValidateAdminAction(cfg *config.Config, userID, action, confirmPhrase string) error {
+	if !cfg.IsOwner(userID) {
+		return fmt.Errorf("không có thiên mệnh chấp chưởng pháp trận này")
+	}
+	if action == menu.ActionAdminMigrateApply && confirmPhrase != "CHUAN HOA DU LIEU" {
+		return fmt.Errorf("pháp ấn chưa khớp")
+	}
+	return nil
+}
+
 func (r *Router) HandleAdminInteraction(s *discordgo.Session, i *discordgo.Interaction, menuSession *menu.Session, action, extra string) {
 	// BẢO MẬT: Gate keeping tuyệt đối
-	if !r.CheckOwner(menuSession.UserID) {
-		ui.EditEphemeralEmbed(s, i, ui.ErrorEmbed("Thiên Cơ Các khép cửa. Đạo hữu không có thiên mệnh chấp chưởng pháp trận này."))
+	if err := ValidateAdminAction(r.cfg, menuSession.UserID, action, ""); err != nil && action != menu.ActionAdminMigrateApply {
+		r.log.Warn("Chặn truy cập Admin trái phép", zap.String("userId", menuSession.UserID), zap.Error(err))
+		ui.EditEphemeralEmbed(s, i, ui.ErrorEmbed(err.Error()))
 		return
 	}
 
@@ -81,7 +93,7 @@ func (r *Router) HandleAdminInteraction(s *discordgo.Session, i *discordgo.Inter
 		data := i.ModalSubmitData()
 		phrase := data.Components[0].(*discordgo.ActionsRow).Components[0].(*discordgo.TextInput).Value
 
-		if phrase != "CHUAN HOA DU LIEU" {
+		if err := ValidateAdminAction(r.cfg, menuSession.UserID, menu.ActionAdminMigrateApply, phrase); err != nil {
 			ui.EditEphemeralEmbed(s, i, ui.WarningEmbed("Pháp ấn chưa khớp. Hành động đã bị Thiên Đạo chặn lại."))
 			return
 		}
@@ -95,6 +107,7 @@ func (r *Router) HandleAdminInteraction(s *discordgo.Session, i *discordgo.Inter
 		ui.EditEphemeralEmbed(s, i, ui.SuccessEmbed("Pháp Trận Hoàn Tất", report))
 
 	default:
+		r.log.Debug("Tính năng Admin chưa mở", zap.String("action", action))
 		ui.EditEphemeralEmbed(s, i, ui.WarningEmbed(ui.MsgComingSoon))
 	}
 }

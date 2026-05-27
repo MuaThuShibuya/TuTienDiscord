@@ -135,7 +135,7 @@ func main() {
 
 	// Khởi tạo các services và adapter cho hệ thống Combat PvE
 	turnOrderSvc := combatpkg.NewTurnOrderService()
-	combatSvc, err := combatpkg.NewService(combatRepo, turnOrderSvc, nil)
+	combatSvc, err := combatpkg.NewService(combatRepo, turnOrderSvc, nil, log)
 	if err != nil {
 		log.Fatal("Không khởi tạo được combat service", zap.Error(err))
 	}
@@ -145,7 +145,7 @@ func main() {
 	pveProv := pvecombatpkg.NewPvEAdapter(pveProgSvc)
 	grantSvc := pvecombatpkg.NewGrantAdapter(inventorySvc)
 
-	pveCombatSvc, err := pvecombatpkg.NewService(combatRepo, statsProv, pveProv, grantSvc, turnOrderSvc, nil)
+	pveCombatSvc, err := pvecombatpkg.NewService(combatRepo, statsProv, pveProv, grantSvc, turnOrderSvc, nil, log)
 	if err != nil {
 		log.Fatal("Không khởi tạo được pvecombat service", zap.Error(err))
 	}
