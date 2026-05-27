@@ -20,6 +20,7 @@ import (
 type Router struct {
 	startHandler *handlers.StartHandler
 	menuHandler  *handlers.MenuHandler
+	devHandler   *handlers.DevHandler
 	menuRouter   *menu.Router
 	log          *zap.Logger
 }
@@ -28,11 +29,13 @@ type Router struct {
 func NewRouter(
 	startHandler *handlers.StartHandler,
 	menuHandler *handlers.MenuHandler,
+	devHandler *handlers.DevHandler,
 	menuRouter *menu.Router,
 ) *Router {
 	return &Router{
 		startHandler: startHandler,
 		menuHandler:  menuHandler,
+		devHandler:   devHandler,
 		menuRouter:   menuRouter,
 		log:          logger.L().Named("discord.router"),
 	}
@@ -56,9 +59,9 @@ func (r *Router) HandleInteraction(s *discordgo.Session, i *discordgo.Interactio
 		r.menuRouter.Handle(s, i.Interaction)
 
 	case discordgo.InteractionModalSubmit:
-		// TODO v0.1+: phân luồng modal submit (ví dụ: modal đổi đạo hiệu)
-		r.log.Debug("Nhận modal submit (chưa xử lý)",
+		r.log.Debug("Route modal submit sang menu router",
 			zap.String("customID", i.ModalSubmitData().CustomID))
+		r.menuRouter.Handle(s, i.Interaction)
 
 	default:
 		r.log.Debug("Loại interaction không xác định", zap.Int("type", int(i.Type)))
@@ -80,6 +83,8 @@ func (r *Router) routeCommand(s *discordgo.Session, i *discordgo.InteractionCrea
 		r.startHandler.Handle(s, i)
 	case "menu":
 		r.menuHandler.Handle(s, i)
+	case "dev":
+		r.devHandler.Handle(s, i)
 	default:
 		r.log.Warn("Lệnh không xác định", zap.String("command", name))
 	}

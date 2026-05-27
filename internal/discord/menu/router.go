@@ -102,13 +102,17 @@ func (r *Router) Handle(s *discordgo.Session, i *discordgo.Interaction) {
 		return
 	}
 
+	// KHÔNG defer các action mở Modal form
+	needsModal := strings.HasSuffix(parsed.Action, "_modal")
+
 	// ACK ngay để Discord không báo "Tương tác này không thành công".
-	// DeferredMessageUpdate = ACK nhưng không thay đổi message ngay, chờ edit sau.
-	if ackErr := s.InteractionRespond(i, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseDeferredMessageUpdate,
-	}); ackErr != nil {
-		r.log.Warn("Không thể ACK interaction", zap.Error(ackErr))
-		return
+	if !needsModal {
+		if ackErr := s.InteractionRespond(i, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseDeferredMessageUpdate,
+		}); ackErr != nil {
+			r.log.Warn("Không thể ACK interaction", zap.Error(ackErr))
+			return
+		}
 	}
 
 	// Từ đây dùng InteractionResponseEdit (cập nhật menu) và FollowupMessageCreate (ephemeral)

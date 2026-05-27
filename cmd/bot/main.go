@@ -156,6 +156,7 @@ func main() {
 	// --- 6. Handlers (Controllers) ---
 	startHandler := handlers.NewStartHandler(profileSvc, cultivationSvc, economySvc, inventorySvc, aptitudeSvc)
 	menuHandler := handlers.NewMenuHandler(cfg, profileSvc, cultivationSvc, economySvc, inventorySvc, equipSvc, alchemySvc, sessionSvc)
+	devHandler := handlers.NewDevHandler(cfg, sessionSvc)
 
 	// --- PvE Menu Router ---
 	pveRouter := pvemenu.NewRouter(pveCombatSvc, combatSvc, pveProgRepo, log)
@@ -173,7 +174,7 @@ func main() {
 	menuRouter := discordmenu.NewRouter(cfg, sessionSvc, cultivationSvc, inventorySvc, equipSvc, alchemySvc, pveActionHandler, adminActionHandler, menuHandler.PageLoaders())
 
 	// --- 8. Discord top-level router ---
-	discordRouter := discord.NewRouter(startHandler, menuHandler, menuRouter)
+	discordRouter := discord.NewRouter(startHandler, menuHandler, devHandler, menuRouter)
 
 	// --- 9. Discord bot ---
 	bot, err := discord.NewBot(cfg, discordRouter)

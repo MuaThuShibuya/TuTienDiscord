@@ -25,6 +25,7 @@ import (
 	invmenu "github.com/whiskey/tu-tien-bot/internal/discord/menu/inventory"
 	mainmenu "github.com/whiskey/tu-tien-bot/internal/discord/menu/main"
 	profilemenu "github.com/whiskey/tu-tien-bot/internal/discord/menu/profile"
+	pvemenu "github.com/whiskey/tu-tien-bot/internal/discord/menu/pve"
 	"github.com/whiskey/tu-tien-bot/internal/discord/ui"
 	"github.com/whiskey/tu-tien-bot/internal/game/alchemy"
 	"github.com/whiskey/tu-tien-bot/internal/game/cultivation"
@@ -122,7 +123,11 @@ func (h *MenuHandler) Handle(s *discordgo.Session, i *discordgo.InteractionCreat
 		return
 	}
 
-	responseData := mainmenu.BuildMenuResponse(toMainMenuVM(session, player, cult, wallet))
+	// Thêm nút Admin nếu là Owner
+	isAdmin := h.cfg.IsOwner(userID)
+	vm := toMainMenuVM(session, player, cult, wallet)
+
+	responseData := mainmenu.BuildMenuResponse(vm, isAdmin)
 
 	err = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
@@ -150,6 +155,7 @@ func (h *MenuHandler) PageLoaders() map[menu.Page]menu.PageLoader {
 		menu.PageInventory:   h.loadInventoryPage,
 		menu.PageEquipment:   h.loadEquipmentPage,
 		menu.PageAlchemy:     h.loadAlchemyPage,
+		menu.PagePvE:         pvemenu.PvEMainLoader,
 	}
 }
 
@@ -169,7 +175,10 @@ func (h *MenuHandler) loadMainPage(ctx context.Context, session *menu.Session) (
 		h.log.Error("loadMainPage failed", zap.String("step", "wallet"), zap.Error(err))
 		return nil, fmt.Errorf("loadMainPage wallet: %w", err)
 	}
-	return mainmenu.BuildMenuEdit(toMainMenuVM(session, player, cult, wallet)), nil
+
+	isAdmin := h.cfg.IsOwner(session.UserID)
+	vm := toMainMenuVM(session, player, cult, wallet)
+	return mainmenu.BuildMenuEdit(vm, isAdmin), nil
 }
 
 func (h *MenuHandler) loadProfilePage(ctx context.Context, session *menu.Session) (*discordgo.InteractionResponseData, error) {

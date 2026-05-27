@@ -78,11 +78,21 @@ const (
 	ActionPvEEscape  = "escape"  // Bỏ chạy
 
 	// Admin
-	ActionAdminMain          = "main"
-	ActionAdminMigrateDryRun = "migrate_dry"
-	ActionAdminMigrateModal  = "migrate_modal" // Mở form confirm
-	ActionAdminMigrateApply  = "migrate_apply" // Xử lý submit form
-	ActionAdminSelectMenu    = "select_menu"
+	ActionAdminMain              = "main"
+	ActionAdminMigrateDryRun     = "migrate_dry"
+	ActionAdminMigrateModal      = "migrate_modal"
+	ActionAdminMigrateApply      = "migrate_apply"
+	ActionAdminPlayerLookupModal = "lookup_modal"
+	ActionAdminPlayerLookupApply = "lookup_apply"
+	ActionAdminResetUserModal    = "reset_user_modal"
+	ActionAdminResetUserPreview  = "reset_user_preview"
+	ActionAdminResetUserApply    = "reset_user_apply"
+	ActionAdminResetAllPreview   = "reset_all_preview"
+	ActionAdminResetAllApply     = "reset_all_apply"
+	ActionAdminConfirmResetModal = "confirm_reset_modal"
+	ActionAdminCombatCleanModal  = "clean_modal"
+	ActionAdminCombatCleanApply  = "clean_apply"
+	ActionAdminAuditLogs         = "audit_logs"
 )
 
 // ParsedID kết quả phân tích custom_id.

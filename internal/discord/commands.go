@@ -12,6 +12,10 @@ import "github.com/bwmarrin/discordgo"
 func AllCommands() []*discordgo.ApplicationCommand {
 	return []*discordgo.ApplicationCommand{
 		{
+			Name:        "dev",
+			Description: "Thiên Mệnh Cai Trị.",
+		},
+		{
 			Name:        "start",
 			Description: "Bắt đầu hành trình tu tiên của đạo hữu.",
 		},

@@ -15,16 +15,16 @@ import (
 )
 
 // BuildMenuResponse tạo response Discord đầy đủ cho trang Main Menu (lần đầu mở menu).
-func BuildMenuResponse(vm *menu.MainMenuVM) *discordgo.InteractionResponseData {
+func BuildMenuResponse(vm *menu.MainMenuVM, isAdmin bool) *discordgo.InteractionResponseData {
 	return &discordgo.InteractionResponseData{
 		Embeds:     []*discordgo.MessageEmbed{buildEmbed(vm)},
-		Components: buildComponents(vm),
+		Components: buildComponents(vm, isAdmin),
 	}
 }
 
 // BuildMenuEdit tạo response cập nhật message khi điều hướng về Main Menu.
-func BuildMenuEdit(vm *menu.MainMenuVM) *discordgo.InteractionResponseData {
-	return BuildMenuResponse(vm)
+func BuildMenuEdit(vm *menu.MainMenuVM, isAdmin bool) *discordgo.InteractionResponseData {
+	return BuildMenuResponse(vm, isAdmin)
 }
 
 func buildEmbed(vm *menu.MainMenuVM) *discordgo.MessageEmbed {
