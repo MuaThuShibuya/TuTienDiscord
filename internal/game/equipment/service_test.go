@@ -15,7 +15,17 @@ type mockEquipRepo struct {
 }
 
 func (m *mockEquipRepo) Get(ctx context.Context, userID, guildID string) (*EquipmentSet, error) {
-	return nil, nil
+	slots := make(map[string]string)
+	if m.equipped != nil {
+		for k, v := range m.equipped {
+			slots[string(k)] = v
+		}
+	}
+	return &EquipmentSet{
+		UserID:  userID,
+		GuildID: guildID,
+		Slots:   slots,
+	}, nil
 }
 func (m *mockEquipRepo) Equip(ctx context.Context, userID, guildID string, slot EquipmentSlot, instanceID string) error {
 	if m.equipped == nil {
@@ -44,9 +54,13 @@ func (m *mockItemRepo) GetInstancesByUser(ctx context.Context, userID, guildID s
 }
 
 func (m *mockItemRepo) GetInstanceByID(ctx context.Context, instanceID, userID, guildID string) (*item.ItemInstance, error) {
-	switch instanceID {
-	case m.validInstance, "inst_wpn_1":
+	if instanceID == "inst_wpn_max" {
+		return &item.ItemInstance{InstanceID: instanceID, DefinitionID: "eq_weapon_moc_kiem_d", UserID: userID, Metadata: map[string]interface{}{"level": int32(10)}}, nil
+	}
+	if instanceID == m.validInstance || instanceID == "inst_wpn_1" {
 		return &item.ItemInstance{InstanceID: instanceID, DefinitionID: "eq_weapon_moc_kiem_d", UserID: userID}, nil
+	}
+	switch instanceID {
 	case "inst_armor_1":
 		return &item.ItemInstance{InstanceID: instanceID, DefinitionID: "eq_armor_vai_tho_d", UserID: userID}, nil
 	case "inst_pill_1":
@@ -68,9 +82,16 @@ func (m *mockItemRepo) UpdateMetadata(ctx context.Context, instanceID, userID, g
 	return nil
 }
 
-type mockInvSvc struct{}
+type mockInvSvc struct {
+	failConsume   bool
+	consumeCalled bool
+}
 
 func (m *mockInvSvc) ConsumeItems(ctx context.Context, userID, guildID string, itemsToConsume map[string]int64) error {
+	m.consumeCalled = true
+	if m.failConsume {
+		return errors.New("mock error: thiếu nguyên liệu")
+	}
 	return nil
 }
 func (m *mockInvSvc) AddItem(ctx context.Context, userID, guildID, defID string, qty int64) error {
@@ -88,6 +109,14 @@ func (m *mockInvSvc) DismantleItem(ctx context.Context, userID, guildID, instanc
 }
 
 // --- Tests ---
+
+func init() {
+	item.RegisterItems(map[string]item.ItemDefinition{
+		"eq_weapon_moc_kiem_d": {ID: "eq_weapon_moc_kiem_d", Name: "Mộc Kiếm", Type: item.TypeEquipment, MaxEnhanceLevel: 10},
+		"eq_armor_vai_tho_d":   {ID: "eq_armor_vai_tho_d", Name: "Vải Thô", Type: item.TypeEquipment},
+		"pill_exp_tu_khi_d":    {ID: "pill_exp_tu_khi_d", Name: "Tụ Khí Đan", Type: item.TypePill},
+	})
+}
 
 func TestEquipment_EquipSuccess(t *testing.T) {
 	mockItem := &mockItemRepo{validInstance: "inst_wpn_1"}
@@ -148,10 +177,56 @@ func TestEquipment_EquipRejectNonEquipment(t *testing.T) {
 	}
 }
 
-func TestEquipment_Enhance_IsTODO(t *testing.T) {
-	svc := NewService(&mockEquipRepo{}, &mockItemRepo{}, &mockInvSvc{})
+func TestEquipment_Enhance_Success(t *testing.T) {
+	mockItem := &mockItemRepo{validInstance: "inst_wpn_1"}
+	mockEq := &mockEquipRepo{equipped: map[EquipmentSlot]string{"weapon": "inst_wpn_1"}}
+	mockInv := &mockInvSvc{}
+	svc := NewService(mockEq, mockItem, mockInv)
+
+	err := svc.Enhance(context.Background(), "user1", "guild1", "weapon")
+	if err != nil {
+		t.Fatalf("Không mong đợi lỗi khi cường hóa hợp lệ: %v", err)
+	}
+}
+
+func TestEquipment_Enhance_MaxLevel(t *testing.T) {
+	mockItem := &mockItemRepo{validInstance: "inst_wpn_max"}
+	mockEq := &mockEquipRepo{equipped: map[EquipmentSlot]string{"weapon": "inst_wpn_max"}}
+	mockInv := &mockInvSvc{}
+	svc := NewService(mockEq, mockItem, mockInv)
+
 	err := svc.Enhance(context.Background(), "user1", "guild1", "weapon")
 	if err == nil {
-		t.Fatal("Mong đợi lỗi khi không có trang bị để cường hóa")
+		t.Fatal("Mong đợi lỗi khi cường hóa trang bị max level")
+	}
+	if mockInv.consumeCalled {
+		t.Error("Không được phép tiêu thụ nguyên liệu khi đạt cấp cường hóa tối đa")
+	}
+}
+
+func TestEquipment_Enhance_MissingMaterials(t *testing.T) {
+	mockItem := &mockItemRepo{validInstance: "inst_wpn_1"}
+	mockEq := &mockEquipRepo{equipped: map[EquipmentSlot]string{"weapon": "inst_wpn_1"}}
+	mockInv := &mockInvSvc{failConsume: true}
+	svc := NewService(mockEq, mockItem, mockInv)
+
+	err := svc.Enhance(context.Background(), "user1", "guild1", "weapon")
+	if err == nil {
+		t.Fatal("Mong đợi lỗi khi thiếu nguyên liệu")
+	}
+}
+
+func TestEquipment_Enhance_EmptySlot(t *testing.T) {
+	svc := NewService(&mockEquipRepo{}, &mockItemRepo{}, &mockInvSvc{})
+	if err := svc.Enhance(context.Background(), "u1", "g1", "weapon"); err == nil {
+		t.Fatal("Mong đợi lỗi khi cường hóa slot trống")
+	}
+}
+
+func TestEquipment_Enhance_NotOwned(t *testing.T) {
+	mockEq := &mockEquipRepo{equipped: map[EquipmentSlot]string{"weapon": "inst_hacker_1"}}
+	svc := NewService(mockEq, &mockItemRepo{}, &mockInvSvc{})
+	if err := svc.Enhance(context.Background(), "u1", "g1", "weapon"); err == nil {
+		t.Fatal("Mong đợi lỗi khi cường hóa trang bị không thuộc sở hữu/không tồn tại")
 	}
 }

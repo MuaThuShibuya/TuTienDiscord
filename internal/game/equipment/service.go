@@ -25,6 +25,8 @@ type Service interface {
 	GetEffectiveStats(ctx context.Context, userID, guildID string) (CombatStats, error)
 }
 
+const DefaultMaxEnhanceLevel = 10
+
 type equipmentService struct {
 	repo     Repository
 	itemRepo item.Repository
@@ -73,6 +75,11 @@ func (s *equipmentService) Enhance(ctx context.Context, userID, guildID string, 
 		return errors.New("không tìm thấy dữ liệu trang bị")
 	}
 
+	def, ok := item.GetDefinition(inst.DefinitionID)
+	if !ok {
+		return errors.New("không tìm thấy định nghĩa trang bị")
+	}
+
 	level := 0
 	if inst.Metadata != nil && inst.Metadata["level"] != nil {
 		if l, ok := inst.Metadata["level"].(int32); ok {
@@ -80,12 +87,20 @@ func (s *equipmentService) Enhance(ctx context.Context, userID, guildID string, 
 		} else if l, ok := inst.Metadata["level"].(float64); ok {
 			level = int(l)
 		}
+		if l, ok := inst.Metadata["level"].(int); ok {
+			level = l
+		}
 	} else {
 		inst.Metadata = make(map[string]interface{})
 	}
 
-	if level >= 10 {
-		return errors.New("trang bị đã đạt cấp tối đa (Cấp 10)")
+	maxLevel := def.MaxEnhanceLevel
+	if maxLevel <= 0 {
+		maxLevel = DefaultMaxEnhanceLevel
+	}
+
+	if level >= maxLevel {
+		return fmt.Errorf("trang bị đã đạt cấp cường hóa tối đa")
 	}
 
 	cost := int64(level + 1)

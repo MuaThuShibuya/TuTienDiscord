@@ -30,18 +30,19 @@ const (
 )
 
 type ItemDefinition struct {
-	ID            string
-	Name          string
-	Type          ItemType
-	Rarity        ItemRarity
-	Stackable     bool
-	MaxStack      int
-	Usable        bool
-	Description   string
-	Effects       map[string]int // Dùng cho đan dược (buff exp, stamina...)
-	Stats         map[string]int // Dùng cho trang bị & lò đan (attack, defense...)
-	RequiredRealm string         // Cảnh giới yêu cầu (nếu có)
-	SellPrice     int64          // Giá bán ra linh thạch
+	ID              string
+	Name            string
+	Type            ItemType
+	Rarity          ItemRarity
+	Stackable       bool
+	MaxStack        int
+	Usable          bool
+	Description     string
+	Effects         map[string]int // Dùng cho đan dược (buff exp, stamina...)
+	Stats           map[string]int // Dùng cho trang bị & lò đan (attack, defense...)
+	RequiredRealm   string         // Cảnh giới yêu cầu (nếu có)
+	SellPrice       int64          // Giá bán ra linh thạch
+	MaxEnhanceLevel int            // Cấp cường hóa tối đa
 }
 
 type ItemInstance struct {
