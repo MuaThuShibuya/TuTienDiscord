@@ -20,6 +20,7 @@ type Service interface {
 	GrantStarterItems(ctx context.Context, userID, guildID string) error
 	ConsumeItems(ctx context.Context, userID, guildID string, itemsToConsume map[string]int64) error
 	UseItem(ctx context.Context, userID, guildID, instanceID string) (string, error)
+	DismantleItem(ctx context.Context, userID, guildID, instanceID string) (string, error)
 }
 
 type inventoryService struct {
@@ -47,7 +48,7 @@ func (s *inventoryService) AddItem(ctx context.Context, userID, guildID, definit
 		return apperrors.ErrInvalidInput
 	}
 
-	inv, items, err := s.GetInventory(ctx, userID, guildID)
+	_, items, err := s.GetInventory(ctx, userID, guildID)
 	if err != nil {
 		return err
 	}
@@ -60,8 +61,8 @@ func (s *inventoryService) AddItem(ctx context.Context, userID, guildID, definit
 		}
 	}
 
-	// Cần tạo ô mới
-	if len(items) >= inv.SlotLimit {
+	// Cần tạo ô mới -> Xin cấp phát 1 ô an toàn ở tầng Database (Atomic)
+	if err := s.invRepo.AcquireSlot(ctx, userID, guildID); err != nil {
 		return apperrors.ErrInventoryFull
 	}
 
@@ -72,7 +73,11 @@ func (s *inventoryService) AddItem(ctx context.Context, userID, guildID, definit
 		GuildID:      guildID,
 		Quantity:     quantity,
 	}
-	return s.itemRepo.CreateInstance(ctx, inst)
+	err = s.itemRepo.CreateInstance(ctx, inst)
+	if err != nil {
+		_ = s.invRepo.ReleaseSlot(ctx, userID, guildID) // Trả lại ô nếu lỗi tạo item
+	}
+	return err
 }
 
 func (s *inventoryService) ConsumeItems(ctx context.Context, userID, guildID string, itemsToConsume map[string]int64) error {
@@ -98,19 +103,49 @@ func (s *inventoryService) ConsumeItems(ctx context.Context, userID, guildID str
 		}
 	}
 
-	// 2. Trừ nguyên liệu (đã xác nhận đủ)
-	// Ghi chú: Đây chưa phải là giao dịch atomic hoàn hảo. Để an toàn tuyệt đối cần MongoDB Transaction.
-	// Tuy nhiên, với game bot, việc check trước rồi trừ sau là đủ an toàn cho hầu hết trường hợp.
+	// 2. Trừ nguyên liệu an toàn với Rollback (Saga Pattern)
+	deductedHistory := make(map[string]int64)
+
 	for defID, requiredQty := range itemsToConsume {
+		rem := requiredQty
 		for _, it := range currentItems {
-			if it.DefinitionID == defID {
-				// Giả định mỗi nguyên liệu chỉ có 1 stack. Sẽ cần cải tiến nếu nguyên liệu có nhiều stack.
-				if err := s.itemRepo.AdjustQuantity(ctx, it.InstanceID, userID, guildID, -requiredQty); err != nil {
-					return fmt.Errorf("lỗi trừ nguyên liệu %s: %w", defID, err)
+			if it.DefinitionID == defID && it.Quantity > 0 {
+				toDeduct := it.Quantity
+				if toDeduct > rem {
+					toDeduct = rem
 				}
-				_ = s.itemRepo.DeleteInstance(ctx, it.InstanceID, userID, guildID) // Tự dọn dẹp nếu số lượng <= 0
-				break
+
+				if err := s.itemRepo.AdjustQuantity(ctx, it.InstanceID, userID, guildID, -toDeduct); err != nil {
+					// Rollback toàn bộ quá trình nếu trừ lỗi (vd: bị xài hết bởi thread khác)
+					for instID, amount := range deductedHistory {
+						_ = s.itemRepo.AdjustQuantity(ctx, instID, userID, guildID, amount)
+					}
+					return fmt.Errorf("tài nguyên %s đang biến động, vui lòng thử lại", defID)
+				}
+
+				deductedHistory[it.InstanceID] += toDeduct
+				rem -= toDeduct
+
+				if rem <= 0 {
+					break
+				}
 			}
+		}
+
+		if rem > 0 {
+			// Lỗi race condition khiến kho không đủ như tính toán ban đầu
+			for instID, amount := range deductedHistory {
+				_ = s.itemRepo.AdjustQuantity(ctx, instID, userID, guildID, amount)
+			}
+			return fmt.Errorf("nguyên liệu %s bị thiếu hụt đột ngột", defID)
+		}
+	}
+
+	// 3. Dọn dẹp túi đồ nếu nguyên liệu đã dùng hết
+	for instID := range deductedHistory {
+		// DeleteInstance có sẵn "$lte: 0" ở Tầng Repo, gọi hoàn toàn an toàn
+		if err := s.itemRepo.DeleteInstance(ctx, instID, userID, guildID); err == nil {
+			_ = s.invRepo.ReleaseSlot(ctx, userID, guildID)
 		}
 	}
 	return nil
@@ -166,19 +201,17 @@ func (s *inventoryService) UseItem(ctx context.Context, userID, guildID, instanc
 
 	// Fallback an toàn nếu Effects chưa được định nghĩa đầy đủ trong Registry
 	if expGained == 0 && staminaGained == 0 && breakthroughBuff == 0 {
-		logger.L().Warn("Sử dụng fallback effect cho item do thiếu config", zap.String("defID", inst.DefinitionID))
-		if inst.DefinitionID == "pill_exp_tu_khi_d" || inst.DefinitionID == "item_qi_pill" {
-			expGained = 50
-		} else if inst.DefinitionID == "pill_stm_hoi_luc_d" {
-			staminaGained = 10
-		}
+		logger.L().Error("Vật phẩm thiếu cấu hình effect", zap.String("defID", inst.DefinitionID))
+		return "", fmt.Errorf("vật phẩm **%s** bị lỗi cấu hình hệ thống, vui lòng báo Admin", def.Name)
 	}
 
 	var messages []string
 	if expGained > 0 {
 		if err := s.cultSvc.AddExperience(ctx, userID, guildID, expGained); err != nil {
 			// Hoàn trả lại vật phẩm nếu hiệu ứng thất bại
-			_ = s.itemRepo.AdjustQuantity(ctx, instanceID, userID, guildID, 1)
+			if rbErr := s.itemRepo.AdjustQuantity(ctx, instanceID, userID, guildID, 1); rbErr != nil {
+				logger.L().Error("CRITICAL: Mất vật phẩm do rollback thất bại", zap.String("instanceId", instanceID), zap.Error(rbErr))
+			}
 			return "", fmt.Errorf("không thể hấp thụ linh khí lúc này: %w", err)
 		}
 		messages = append(messages, fmt.Sprintf("nhận **%d** tu vi", expGained))
@@ -186,7 +219,9 @@ func (s *inventoryService) UseItem(ctx context.Context, userID, guildID, instanc
 	if staminaGained > 0 {
 		if err := s.cultSvc.AddStamina(ctx, userID, guildID, staminaGained); err != nil {
 			// Hoàn trả lại vật phẩm nếu hiệu ứng thất bại
-			_ = s.itemRepo.AdjustQuantity(ctx, instanceID, userID, guildID, 1)
+			if rbErr := s.itemRepo.AdjustQuantity(ctx, instanceID, userID, guildID, 1); rbErr != nil {
+				logger.L().Error("CRITICAL: Mất vật phẩm do rollback thất bại", zap.String("instanceId", instanceID), zap.Error(rbErr))
+			}
 			return "", fmt.Errorf("không thể hồi phục thể lực lúc này: %w", err)
 		}
 		messages = append(messages, fmt.Sprintf("hồi **%d** thể lực", staminaGained))
@@ -204,6 +239,43 @@ func (s *inventoryService) UseItem(ctx context.Context, userID, guildID, instanc
 	}
 
 	// 3. Gọi hàm xóa (Hàm này đã được bảo vệ Atomic $lte: 0 ở Tầng Repository)
-	_ = s.itemRepo.DeleteInstance(ctx, instanceID, userID, guildID)
+	if err := s.itemRepo.DeleteInstance(ctx, instanceID, userID, guildID); err == nil {
+		_ = s.invRepo.ReleaseSlot(ctx, userID, guildID)
+	}
 	return message, nil
+}
+
+func (s *inventoryService) DismantleItem(ctx context.Context, userID, guildID, instanceID string) (string, error) {
+	inst, err := s.itemRepo.GetInstanceByID(ctx, instanceID, userID, guildID)
+	if err != nil {
+		return "", err
+	}
+	def, ok := item.GetDefinition(inst.DefinitionID)
+	if !ok || def.Type != item.TypeEquipment {
+		return "", fmt.Errorf("chỉ có thể phân giải trang bị")
+	}
+
+	matDefID := "mat_enhance_hac_thiet_d"
+	qty := int64(1)
+	switch def.Rarity {
+	case item.RarityC:
+		qty = 2
+	case item.RarityB:
+		qty = 4
+	case item.RarityA:
+		qty = 10
+	case item.RarityS:
+		qty = 30
+	}
+
+	if err := s.itemRepo.DeleteInstance(ctx, instanceID, userID, guildID); err != nil {
+		return "", err
+	}
+	_ = s.invRepo.ReleaseSlot(ctx, userID, guildID)
+
+	if err := s.AddItem(ctx, userID, guildID, matDefID, qty); err != nil {
+		return "", fmt.Errorf("phân giải thành công nhưng túi đồ đầy, không thể chứa nguyên liệu")
+	}
+
+	return fmt.Sprintf("Phân giải **%s** thành công! Nhận được **%d** Hắc Thiết.", def.Name, qty), nil
 }

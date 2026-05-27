@@ -452,6 +452,56 @@ func (r *Router) handleInventoryAction(s *discordgo.Session, i *discordgo.Intera
 			r.sendEphemeral(s, i, ui.SuccessEmbed("Túi Đồ", msg))
 		}
 
+	case ActionInventoryDismantle:
+		data := i.MessageComponentData()
+		if len(data.Values) == 0 {
+			r.sendEphemeral(s, i, ui.ErrorEmbed(ui.MsgGenericError))
+			return
+		}
+		instanceID := data.Values[0]
+
+		// 1. Chặn phân giải nếu đang được mặc trên người
+		eqSet, err := r.equipSvc.GetEquipment(ctx, session.UserID, session.GuildID)
+		if err == nil && eqSet != nil {
+			for _, eqInstID := range eqSet.Slots {
+				if eqInstID == instanceID {
+					r.sendEphemeral(s, i, ui.WarningEmbed("Trang bị đang được mặc, không thể phân giải! Hãy tháo ra trước."))
+					return
+				}
+			}
+		}
+
+		// 2. Thay thế menu hiện tại bằng cảnh báo Confirm Nội tuyến (Tuyệt đỉnh UI/UX)
+		embed := ui.WarningEmbed("Bạn có chắc chắn muốn phân giải vật phẩm này? Quá trình không thể hoàn tác.")
+		comps := []discordgo.MessageComponent{
+			discordgo.ActionsRow{
+				Components: []discordgo.MessageComponent{
+					discordgo.Button{
+						CustomID: Build(DomainInventory, ActionInventoryDismantleConfirm, session.SessionID, instanceID),
+						Label:    "Xác nhận Phân giải",
+						Style:    discordgo.DangerButton,
+					},
+					discordgo.Button{
+						CustomID: Build(DomainNav, ActionRefresh, session.SessionID, string(PageInventory)),
+						Label:    "Hủy",
+						Style:    discordgo.SecondaryButton,
+					},
+				},
+			},
+		}
+		_, _ = s.InteractionResponseEdit(i, &discordgo.WebhookEdit{Embeds: &[]*discordgo.MessageEmbed{embed}, Components: &comps})
+		return
+
+	case ActionInventoryDismantleConfirm:
+		instanceID := extra
+		msg, err := r.inventorySvc.DismantleItem(ctx, session.UserID, session.GuildID, instanceID)
+		if err != nil {
+			r.sendEphemeral(s, i, ui.WarningEmbed(apperrors.UserFacing(err, "Không thể phân giải vật phẩm lúc này!")))
+			return
+		}
+		r.renderPage(s, i, session, PageInventory)
+		r.sendEphemeral(s, i, ui.SuccessEmbed("Phân Giải", msg))
+
 	default:
 		r.sendEphemeral(s, i, ui.WarningEmbed(ui.MsgComingSoon))
 	}
@@ -517,6 +567,15 @@ func (r *Router) handleEquipmentAction(s *discordgo.Session, i *discordgo.Intera
 
 		r.renderPage(s, i, session, PageEquipment)
 		r.sendEphemeral(s, i, ui.SuccessEmbed("Trang Bị", "Tháo trang bị thành công!"))
+
+	case ActionEquipmentEnhance:
+		slot := equipment.EquipmentSlot(extra)
+		if err := r.equipSvc.Enhance(ctx, session.UserID, session.GuildID, slot); err != nil {
+			r.sendEphemeral(s, i, ui.WarningEmbed(apperrors.UserFacing(err, err.Error())))
+			return
+		}
+		r.renderPage(s, i, session, PageEquipment)
+		r.sendEphemeral(s, i, ui.SuccessEmbed("Cường Hóa", "Chúc mừng! Trang bị đã được thăng cấp."))
 
 	default:
 		r.sendEphemeral(s, i, ui.WarningEmbed(ui.MsgComingSoon))

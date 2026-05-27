@@ -114,7 +114,7 @@ func main() {
 	cooldownSvc := cooldownpkg.NewService(cooldownRepo)
 	cultivationSvc := cultivationpkg.NewService(cultivationRepo, cooldownSvc, economySvc)
 	inventorySvc := inventorypkg.NewService(invRepo, itemRepo, cultivationSvc)
-	equipSvc := equipmentpkg.NewService(equipRepo, itemRepo)
+	equipSvc := equipmentpkg.NewService(equipRepo, itemRepo, inventorySvc)
 	sessionSvc := discordmenu.NewSessionService(sessionRepo)
 	alchemySvc := alchemypkg.NewService(alchemyRepo, inventorySvc)
 

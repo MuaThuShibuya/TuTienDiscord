@@ -24,6 +24,12 @@ func (m *mockInvRepo) GetOrCreate(ctx context.Context, userID, guildID string) (
 func (m *mockInvRepo) MarkStarterGranted(ctx context.Context, userID, guildID string) error {
 	return nil
 }
+func (m *mockInvRepo) AcquireSlot(ctx context.Context, userID, guildID string) error {
+	return nil // Chấp nhận luôn trong bài test hiện tại
+}
+func (m *mockInvRepo) ReleaseSlot(ctx context.Context, userID, guildID string) error {
+	return nil
+}
 
 type mockCultSvc struct {
 	cultivation.Service
@@ -93,6 +99,9 @@ func (m *mockItemRepo) DeleteInstance(ctx context.Context, instanceID, userID, g
 	if ok && it.Quantity <= 0 {
 		delete(m.items, instanceID)
 	}
+	return nil
+}
+func (m *mockItemRepo) UpdateMetadata(ctx context.Context, instanceID, userID, guildID string, metadata map[string]interface{}) error {
 	return nil
 }
 

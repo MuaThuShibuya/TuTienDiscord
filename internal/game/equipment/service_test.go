@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/whiskey/tu-tien-bot/internal/game/inventory"
 	"github.com/whiskey/tu-tien-bot/internal/game/item"
 )
 
@@ -63,13 +64,35 @@ func (m *mockItemRepo) AdjustQuantity(ctx context.Context, instanceID, userID, g
 func (m *mockItemRepo) DeleteInstance(ctx context.Context, instanceID, userID, guildID string) error {
 	return nil
 }
+func (m *mockItemRepo) UpdateMetadata(ctx context.Context, instanceID, userID, guildID string, metadata map[string]interface{}) error {
+	return nil
+}
+
+type mockInvSvc struct{}
+
+func (m *mockInvSvc) ConsumeItems(ctx context.Context, userID, guildID string, itemsToConsume map[string]int64) error {
+	return nil
+}
+func (m *mockInvSvc) AddItem(ctx context.Context, userID, guildID, defID string, qty int64) error {
+	return nil
+}
+func (m *mockInvSvc) GetInventory(ctx context.Context, userID, guildID string) (*inventory.Inventory, []*item.ItemInstance, error) {
+	return nil, nil, nil
+}
+func (m *mockInvSvc) GrantStarterItems(ctx context.Context, userID, guildID string) error { return nil }
+func (m *mockInvSvc) UseItem(ctx context.Context, userID, guildID, instanceID string) (string, error) {
+	return "", nil
+}
+func (m *mockInvSvc) DismantleItem(ctx context.Context, userID, guildID, instanceID string) (string, error) {
+	return "", nil
+}
 
 // --- Tests ---
 
 func TestEquipment_EquipSuccess(t *testing.T) {
 	mockItem := &mockItemRepo{validInstance: "inst_wpn_1"}
 	mockEq := &mockEquipRepo{}
-	svc := NewService(mockEq, mockItem)
+	svc := NewService(mockEq, mockItem, &mockInvSvc{})
 
 	err := svc.Equip(context.Background(), "user1", "guild1", "weapon", "inst_wpn_1")
 	if err != nil {
@@ -83,7 +106,7 @@ func TestEquipment_EquipSuccess(t *testing.T) {
 func TestEquipment_EquipNotOwned(t *testing.T) {
 	mockItem := &mockItemRepo{validInstance: "inst_wpn_1"}
 	mockEq := &mockEquipRepo{}
-	svc := NewService(mockEq, mockItem)
+	svc := NewService(mockEq, mockItem, &mockInvSvc{})
 
 	// Thử mặc item của người khác (instance ID không tồn tại cho user này)
 	err := svc.Equip(context.Background(), "user1", "guild1", "weapon", "inst_hacker_1")
@@ -95,7 +118,7 @@ func TestEquipment_EquipNotOwned(t *testing.T) {
 func TestEquipment_EquipRejectWrongSlot(t *testing.T) {
 	mockItem := &mockItemRepo{validInstance: "inst_wpn_1"}
 	mockEq := &mockEquipRepo{}
-	svc := NewService(mockEq, mockItem)
+	svc := NewService(mockEq, mockItem, &mockInvSvc{})
 
 	err := svc.Equip(context.Background(), "user1", "guild1", "armor", "inst_wpn_1")
 	if err == nil {
@@ -106,7 +129,7 @@ func TestEquipment_EquipRejectWrongSlot(t *testing.T) {
 func TestEquipment_EquipRejectMissingDefinitionID(t *testing.T) {
 	mockItem := &mockItemRepo{}
 	mockEq := &mockEquipRepo{}
-	svc := NewService(mockEq, mockItem)
+	svc := NewService(mockEq, mockItem, &mockInvSvc{})
 
 	err := svc.Equip(context.Background(), "user1", "guild1", "weapon", "inst_missing_def")
 	if err == nil {
@@ -117,7 +140,7 @@ func TestEquipment_EquipRejectMissingDefinitionID(t *testing.T) {
 func TestEquipment_EquipRejectNonEquipment(t *testing.T) {
 	mockItem := &mockItemRepo{}
 	mockEq := &mockEquipRepo{}
-	svc := NewService(mockEq, mockItem)
+	svc := NewService(mockEq, mockItem, &mockInvSvc{})
 
 	err := svc.Equip(context.Background(), "user1", "guild1", "weapon", "inst_pill_1")
 	if err == nil {
@@ -126,9 +149,9 @@ func TestEquipment_EquipRejectNonEquipment(t *testing.T) {
 }
 
 func TestEquipment_Enhance_IsTODO(t *testing.T) {
-	svc := NewService(&mockEquipRepo{}, &mockItemRepo{})
+	svc := NewService(&mockEquipRepo{}, &mockItemRepo{}, &mockInvSvc{})
 	err := svc.Enhance(context.Background(), "user1", "guild1", "weapon")
-	if err != nil {
-		t.Logf("Enhance hiện tại chưa được implement, lỗi báo về: %v", err)
+	if err == nil {
+		t.Fatal("Mong đợi lỗi khi không có trang bị để cường hóa")
 	}
 }

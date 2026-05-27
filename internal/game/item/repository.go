@@ -9,4 +9,5 @@ type Repository interface {
 	GetInstanceByID(ctx context.Context, instanceID, userID, guildID string) (*ItemInstance, error)
 	AdjustQuantity(ctx context.Context, instanceID, userID, guildID string, amount int64) error
 	DeleteInstance(ctx context.Context, instanceID, userID, guildID string) error
+	UpdateMetadata(ctx context.Context, instanceID, userID, guildID string, metadata map[string]interface{}) error
 }

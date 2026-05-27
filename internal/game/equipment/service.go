@@ -3,24 +3,36 @@ package equipment
 import (
 	"context"
 	"errors"
+	"fmt"
 
+	"github.com/whiskey/tu-tien-bot/internal/game/inventory"
 	"github.com/whiskey/tu-tien-bot/internal/game/item"
 )
+
+type CombatStats struct {
+	MaxHP       int
+	ATK         int
+	DEF         int
+	CritRate    int
+	CombatPower int
+}
 
 type Service interface {
 	GetEquipment(ctx context.Context, userID, guildID string) (*EquipmentSet, error)
 	Equip(ctx context.Context, userID, guildID string, slot EquipmentSlot, instanceID string) error
 	Unequip(ctx context.Context, userID, guildID string, slot EquipmentSlot) error
 	Enhance(ctx context.Context, userID, guildID string, slot EquipmentSlot) error
+	GetEffectiveStats(ctx context.Context, userID, guildID string) (CombatStats, error)
 }
 
 type equipmentService struct {
 	repo     Repository
 	itemRepo item.Repository
+	invSvc   inventory.Service
 }
 
-func NewService(repo Repository, itemRepo item.Repository) Service {
-	return &equipmentService{repo: repo, itemRepo: itemRepo}
+func NewService(repo Repository, itemRepo item.Repository, invSvc inventory.Service) Service {
+	return &equipmentService{repo: repo, itemRepo: itemRepo, invSvc: invSvc}
 }
 
 func (s *equipmentService) GetEquipment(ctx context.Context, userID, guildID string) (*EquipmentSet, error) {
@@ -46,5 +58,86 @@ func (s *equipmentService) Unequip(ctx context.Context, userID, guildID string, 
 }
 
 func (s *equipmentService) Enhance(ctx context.Context, userID, guildID string, slot EquipmentSlot) error {
-	return errors.New("tính năng cường hóa đang được hoàn thiện")
+	eq, err := s.repo.Get(ctx, userID, guildID)
+	if err != nil {
+		return err
+	}
+
+	instID, ok := eq.Slots[string(slot)]
+	if !ok || instID == "" {
+		return errors.New("không có trang bị ở vị trí này để cường hóa")
+	}
+
+	inst, err := s.itemRepo.GetInstanceByID(ctx, instID, userID, guildID)
+	if err != nil {
+		return errors.New("không tìm thấy dữ liệu trang bị")
+	}
+
+	level := 0
+	if inst.Metadata != nil && inst.Metadata["level"] != nil {
+		if l, ok := inst.Metadata["level"].(int32); ok {
+			level = int(l)
+		} else if l, ok := inst.Metadata["level"].(float64); ok {
+			level = int(l)
+		}
+	} else {
+		inst.Metadata = make(map[string]interface{})
+	}
+
+	if level >= 10 {
+		return errors.New("trang bị đã đạt cấp tối đa (Cấp 10)")
+	}
+
+	cost := int64(level + 1)
+	if err := s.invSvc.ConsumeItems(ctx, userID, guildID, map[string]int64{"mat_enhance_hac_thiet_d": cost}); err != nil {
+		return fmt.Errorf("không đủ Hắc Thiết. Cần **%d** để thăng cấp", cost)
+	}
+
+	inst.Metadata["level"] = level + 1
+	return s.itemRepo.UpdateMetadata(ctx, inst.InstanceID, userID, guildID, inst.Metadata)
+}
+
+func (s *equipmentService) GetEffectiveStats(ctx context.Context, userID, guildID string) (CombatStats, error) {
+	var stats CombatStats
+	eq, err := s.repo.Get(ctx, userID, guildID)
+	if err != nil {
+		return stats, err
+	}
+
+	for _, instID := range eq.Slots {
+		inst, err := s.itemRepo.GetInstanceByID(ctx, instID, userID, guildID)
+		if err != nil {
+			continue
+		}
+		def, ok := item.GetDefinition(inst.DefinitionID)
+		if !ok || def.Stats == nil {
+			continue
+		}
+
+		level := 0
+		if inst.Metadata != nil && inst.Metadata["level"] != nil {
+			if l, ok := inst.Metadata["level"].(int32); ok {
+				level = int(l)
+			} else if l, ok := inst.Metadata["level"].(float64); ok {
+				level = int(l)
+			}
+		}
+
+		// Cường hóa: buff 10% chỉ số mỗi cấp
+		multiplier := 1.0 + (float64(level) * 0.1)
+
+		stats.MaxHP += int(float64(def.Stats["hp"]) * multiplier)
+		stats.ATK += int(float64(def.Stats["atk"]) * multiplier)
+		stats.DEF += int(float64(def.Stats["def"]) * multiplier)
+
+		// Crit thường cố định không tăng theo % multiplier, chỉ cộng dồn thẳng
+		if critRate, exists := def.Stats["crit"]; exists {
+			stats.CritRate += critRate
+		}
+	}
+
+	// Lực chiến (nháp): (ATK + DEF) * 2 + HP / 10
+	stats.CombatPower = stats.ATK*2 + stats.DEF*2 + stats.MaxHP/10
+
+	return stats, nil
 }

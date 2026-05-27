@@ -24,6 +24,7 @@ func (r *mongoInventoryRepo) GetOrCreate(ctx context.Context, userID, guildID st
 			"userId":         userID,
 			"guildId":        guildID,
 			"slotLimit":      50,
+			"slotUsage":      0,
 			"starterGranted": false,
 			"createdAt":      time.Now().UTC(),
 			"updatedAt":      time.Now().UTC(),
@@ -48,4 +49,25 @@ func (r *mongoInventoryRepo) MarkStarterGranted(ctx context.Context, userID, gui
 		return fmt.Errorf("already granted or not found")
 	}
 	return nil
+}
+
+func (r *mongoInventoryRepo) AcquireSlot(ctx context.Context, userID, guildID string) error {
+	// So sánh trực tiếp slotUsage < slotLimit trên DB (Atomic)
+	filter := bson.M{"userId": userID, "guildId": guildID, "$expr": bson.M{"$lt": []interface{}{"$slotUsage", "$slotLimit"}}}
+	update := bson.M{"$inc": bson.M{"slotUsage": 1}, "$set": bson.M{"updatedAt": time.Now().UTC()}}
+	res, err := r.col.UpdateOne(ctx, filter, update)
+	if err != nil {
+		return err
+	}
+	if res.MatchedCount == 0 {
+		return fmt.Errorf("không còn ô trống trong túi đồ")
+	}
+	return nil
+}
+
+func (r *mongoInventoryRepo) ReleaseSlot(ctx context.Context, userID, guildID string) error {
+	filter := bson.M{"userId": userID, "guildId": guildID, "slotUsage": bson.M{"$gt": 0}}
+	update := bson.M{"$inc": bson.M{"slotUsage": -1}, "$set": bson.M{"updatedAt": time.Now().UTC()}}
+	_, err := r.col.UpdateOne(ctx, filter, update)
+	return err
 }

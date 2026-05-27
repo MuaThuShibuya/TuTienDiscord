@@ -12,6 +12,7 @@ type Inventory struct {
 	UserID         string             `bson:"userId"`
 	GuildID        string             `bson:"guildId"`
 	SlotLimit      int                `bson:"slotLimit"`
+	SlotUsage      int                `bson:"slotUsage"`
 	StarterGranted bool               `bson:"starterGranted"`
 	CreatedAt      time.Time          `bson:"createdAt"`
 	UpdatedAt      time.Time          `bson:"updatedAt"`

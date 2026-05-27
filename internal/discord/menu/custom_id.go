@@ -49,13 +49,15 @@ const (
 	ActionChoosePath   = "choosepath"   // Chọn đạo lộ (Select Menu)
 
 	// Inventory
-	ActionInventoryUse       = "use"       // Dùng vật phẩm
-	ActionInventoryDismantle = "dismantle" // Phân giải
-	ActionInventoryPage      = "page"      // Phân trang
+	ActionInventoryUse              = "use"          // Dùng vật phẩm
+	ActionInventoryDismantle        = "dismantle"    // Phân giải
+	ActionInventoryDismantleConfirm = "dismantle_ok" // Xác nhận phân giải
+	ActionInventoryPage             = "page"         // Phân trang
 
 	// Equipment
 	ActionEquipmentEquip   = "equip"   // Mặc trang bị
 	ActionEquipmentUnequip = "unequip" // Tháo trang bị
+	ActionEquipmentEnhance = "enhance" // Cường hóa
 
 	// Alchemy
 	ActionAlchemyCraft  = "craft"  // Luyện đan

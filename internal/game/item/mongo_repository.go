@@ -73,3 +73,10 @@ func (r *mongoItemRepo) DeleteInstance(ctx context.Context, instanceID, userID, 
 	_, err := r.col.DeleteOne(ctx, bson.M{"instanceId": instanceID, "userId": userID, "guildId": guildID, "quantity": bson.M{"$lte": 0}})
 	return err
 }
+
+func (r *mongoItemRepo) UpdateMetadata(ctx context.Context, instanceID, userID, guildID string, metadata map[string]interface{}) error {
+	filter := bson.M{"instanceId": instanceID, "userId": userID, "guildId": guildID}
+	update := bson.M{"$set": bson.M{"metadata": metadata, "updatedAt": time.Now().UTC()}}
+	_, err := r.col.UpdateOne(ctx, filter, update)
+	return err
+}
