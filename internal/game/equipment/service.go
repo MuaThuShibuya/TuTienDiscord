@@ -10,11 +10,11 @@ import (
 )
 
 type CombatStats struct {
-	MaxHP       int
-	ATK         int
-	DEF         int
-	CritRate    int
-	CombatPower int
+	MaxHP       int64
+	ATK         int64
+	DEF         int64
+	CritRate    float64
+	CombatPower int64
 }
 
 type Service interface {
@@ -141,17 +141,17 @@ func (s *equipmentService) GetEffectiveStats(ctx context.Context, userID, guildI
 		// Cường hóa: buff 10% chỉ số mỗi cấp
 		multiplier := 1.0 + (float64(level) * 0.1)
 
-		stats.MaxHP += int(float64(def.Stats["hp"]) * multiplier)
-		stats.ATK += int(float64(def.Stats["atk"]) * multiplier)
-		stats.DEF += int(float64(def.Stats["def"]) * multiplier)
+		stats.MaxHP += int64(float64(def.Stats["hp"]) * multiplier)
+		stats.ATK += int64(float64(def.Stats["atk"]) * multiplier)
+		stats.DEF += int64(float64(def.Stats["def"]) * multiplier)
 
 		// Crit thường cố định không tăng theo % multiplier, chỉ cộng dồn thẳng
 		if critRate, exists := def.Stats["crit"]; exists {
-			stats.CritRate += critRate
+			// Giả định config ghi crit là 15 -> Tương đương 15% (0.15)
+			stats.CritRate += float64(critRate) / 100.0
 		}
 	}
 
-	// Lực chiến (nháp): (ATK + DEF) * 2 + HP / 10
 	stats.CombatPower = stats.ATK*2 + stats.DEF*2 + stats.MaxHP/10
 
 	return stats, nil

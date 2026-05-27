@@ -85,6 +85,17 @@ func (s *TurnOrderService) DelayActor(order []TurnOrderEntry, actorID string, am
 	return order
 }
 
+// RemoveActor loại bỏ một thực thể khỏi TurnOrder (ví dụ khi đã chết).
+func (s *TurnOrderService) RemoveActor(order []TurnOrderEntry, actorID string) []TurnOrderEntry {
+	var newOrder []TurnOrderEntry
+	for _, entry := range order {
+		if entry.ActorID != actorID {
+			newOrder = append(newOrder, entry)
+		}
+	}
+	return newOrder
+}
+
 func (s *TurnOrderService) sortOrder(order []TurnOrderEntry) {
 	sort.Slice(order, func(i, j int) bool {
 		return order[i].ActionValue < order[j].ActionValue

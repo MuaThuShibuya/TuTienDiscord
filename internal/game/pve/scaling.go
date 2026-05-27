@@ -3,8 +3,6 @@
 
 package pve
 
-import "github.com/whiskey/tu-tien-bot/internal/game/combat"
-
 type DifficultyScalingConfig struct {
 	BaseMultiplier     float64
 	PerStageMultiplier float64
@@ -22,7 +20,7 @@ var DefaultScalingConfig = DifficultyScalingConfig{
 }
 
 // ScaleMonsterStats biến đổi chỉ số gốc của quái vật theo tiến độ ải.
-func ScaleMonsterStats(base combat.CombatStats, stage int, actType ActivityType, role MonsterRole, cfg DifficultyScalingConfig) combat.CombatStats {
+func ScaleMonsterStats(base MonsterStats, stage int, actType ActivityType, role MonsterRole, cfg DifficultyScalingConfig) MonsterStats {
 	mult := cfg.BaseMultiplier + (float64(stage-1) * cfg.PerStageMultiplier)
 
 	if actType == ActivityBiCanh {

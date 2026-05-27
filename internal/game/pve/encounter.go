@@ -6,15 +6,20 @@ package pve
 import (
 	"fmt"
 	"math/rand"
-
-	"github.com/whiskey/tu-tien-bot/internal/game/combat"
 )
+
+type Enemy struct {
+	ID    string
+	Name  string
+	Level int
+	Stats MonsterStats
+}
 
 type EncounterDefinition struct {
 	AreaID                 string
 	Stage                  int
 	ActivityType           ActivityType
-	Enemies                []combat.CombatActor
+	Enemies                []Enemy
 	RecommendedCombatPower int64
 	GuaranteedRewardPoolID string
 	BonusRewardPoolID      string
@@ -45,7 +50,7 @@ func GenerateEncounter(area PvEAreaDefinition, stage int, rng *rand.Rand) (*Enco
 		enemyCount = 3
 	}
 
-	var enemies []combat.CombatActor
+	var enemies []Enemy
 	for i := 0; i < enemyCount; i++ {
 		var mDef MonsterDefinition
 		role := MonsterRoleNormal
@@ -62,13 +67,11 @@ func GenerateEncounter(area PvEAreaDefinition, stage int, rng *rand.Rand) (*Enco
 		}
 
 		scaledStats := ScaleMonsterStats(mDef.BaseStats, stage, area.ActivityType, role, DefaultScalingConfig)
-		enemies = append(enemies, combat.CombatActor{
-			ID:        fmt.Sprintf("e_%d_%s", i, mDef.ID),
-			Type:      combat.ActorTypeMonster,
-			Name:      mDef.Name,
-			Level:     mDef.BaseLevel + stage,
-			Stats:     scaledStats,
-			CurrentHP: scaledStats.MaxHP,
+		enemies = append(enemies, Enemy{
+			ID:    fmt.Sprintf("e_%d_%s", i, mDef.ID),
+			Name:  mDef.Name,
+			Level: mDef.BaseLevel + stage,
+			Stats: scaledStats,
 		})
 	}
 

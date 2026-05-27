@@ -26,20 +26,37 @@ type CombatLogEntry struct {
 	CreatedAt time.Time `bson:"createdAt" json:"createdAt"`
 }
 
+// ClaimedReward lưu thông tin vật phẩm đã nhận (dạng nguyên thủy, độc lập với pve package)
+type ClaimedReward struct {
+	Type     string `bson:"type" json:"type"`
+	RefID    string `bson:"refId" json:"refId"`
+	Quantity int64  `bson:"quantity" json:"quantity"`
+	IsBonus  bool   `bson:"isBonus" json:"isBonus"`
+}
+
 // CombatSession lưu toàn bộ state của trận đấu (Lưu MongoDB).
 type CombatSession struct {
-	ID              string           `bson:"_id" json:"id"`
-	UserID          string           `bson:"userId" json:"userId"` // Chủ phòng
-	ZoneID          string           `bson:"zoneId" json:"zoneId"`
-	Stage           int              `bson:"stage" json:"stage"`
-	State           SessionState     `bson:"state" json:"state"`
-	Turn            int              `bson:"turn" json:"turn"`
-	Player          CombatActor      `bson:"player" json:"player"`
-	Enemies         []CombatActor    `bson:"enemies" json:"enemies"`
-	Logs            []CombatLogEntry `bson:"logs" json:"logs"`
-	IdempotencyKeys []string         `bson:"idempotencyKeys" json:"idempotencyKeys"` // Chống double-click
-	AutoBattle      AutoBattlePolicy `bson:"autoBattle" json:"autoBattle"`           // Chính sách đánh tự động
-	CreatedAt       time.Time        `bson:"createdAt" json:"createdAt"`
-	UpdatedAt       time.Time        `bson:"updatedAt" json:"updatedAt"`
-	ExpiresAt       time.Time        `bson:"expiresAt" json:"expiresAt"` // MongoDB TTL index sẽ dọn dẹp
+	ID                     string           `bson:"_id" json:"id"`
+	UserID                 string           `bson:"userId" json:"userId"` // Chủ phòng
+	AreaID                 string           `bson:"areaId" json:"areaId"`
+	ActivityType           string           `bson:"activityType" json:"activityType"`
+	Stage                  int              `bson:"stage" json:"stage"`
+	State                  SessionState     `bson:"state" json:"state"`
+	Turn                   int              `bson:"turn" json:"turn"`
+	Player                 CombatActor      `bson:"player" json:"player"`
+	Enemies                []CombatActor    `bson:"enemies" json:"enemies"`
+	CurrentActorID         string           `bson:"currentActorId" json:"currentActorId"`
+	TurnOrder              []TurnOrderEntry `bson:"turnOrder" json:"turnOrder"`
+	GuaranteedRewardPoolID string           `bson:"guaranteedRewardPoolId" json:"guaranteedRewardPoolId"`
+	BonusRewardPoolID      string           `bson:"bonusRewardPoolId" json:"bonusRewardPoolId"`
+	Logs                   []CombatLogEntry `bson:"logs" json:"logs"`
+	IdempotencyKeys        []string         `bson:"idempotencyKeys" json:"idempotencyKeys"` // Chống double-click
+	AutoBattle             AutoBattlePolicy `bson:"autoBattle" json:"autoBattle"`           // Chính sách đánh tự động
+	RewardClaimed          bool             `bson:"rewardClaimed" json:"rewardClaimed"`
+	RewardClaimedAt        time.Time        `bson:"rewardClaimedAt" json:"rewardClaimedAt"`
+	RewardIdempotencyKey   string           `bson:"rewardIdempotencyKey" json:"rewardIdempotencyKey"`
+	ClaimedRewards         []ClaimedReward  `bson:"claimedRewards" json:"claimedRewards"`
+	CreatedAt              time.Time        `bson:"createdAt" json:"createdAt"`
+	UpdatedAt              time.Time        `bson:"updatedAt" json:"updatedAt"`
+	ExpiresAt              time.Time        `bson:"expiresAt" json:"expiresAt"` // MongoDB TTL index sẽ dọn dẹp
 }

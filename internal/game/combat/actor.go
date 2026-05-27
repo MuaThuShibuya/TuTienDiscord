@@ -19,5 +19,7 @@ type CombatActor struct {
 	Level         int            `bson:"level" json:"level"`
 	Stats         CombatStats    `bson:"stats" json:"stats"`
 	CurrentHP     int64          `bson:"currentHp" json:"currentHp"`
+	CurrentRage   int64          `bson:"currentRage" json:"currentRage"`
+	CurrentEnergy int64          `bson:"currentEnergy" json:"currentEnergy"`
 	StatusEffects []StatusEffect `bson:"statusEffects" json:"statusEffects"`
 }

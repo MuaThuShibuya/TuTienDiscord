@@ -3,21 +3,19 @@
 
 package pve
 
-import "github.com/whiskey/tu-tien-bot/internal/game/combat"
-
 var MonsterRegistry = map[string]MonsterDefinition{
 	// Du Ngoạn
-	"monster_linh_tho": {ID: "monster_linh_tho", Name: "Linh Thỏ", BaseLevel: 1, BaseStats: combat.CombatStats{MaxHP: 50, ATK: 5, DEF: 2, Speed: 100}},
-	"monster_da_lang":  {ID: "monster_da_lang", Name: "Dã Lang", BaseLevel: 2, BaseStats: combat.CombatStats{MaxHP: 80, ATK: 12, DEF: 5, Speed: 110}},
-	"monster_truc_yeu": {ID: "monster_truc_yeu", Name: "Trúc Yêu", BaseLevel: 3, BaseStats: combat.CombatStats{MaxHP: 120, ATK: 8, DEF: 15, Speed: 80}},
-	"monster_son_tac":  {ID: "monster_son_tac", Name: "Sơn Tặc", BaseLevel: 4, BaseStats: combat.CombatStats{MaxHP: 150, ATK: 20, DEF: 10, Speed: 105}},
-	"monster_doc_xa":   {ID: "monster_doc_xa", Name: "Độc Xà", BaseLevel: 5, BaseStats: combat.CombatStats{MaxHP: 70, ATK: 25, DEF: 3, Speed: 130}},
+	"monster_linh_tho": {ID: "monster_linh_tho", Name: "Linh Thỏ", BaseLevel: 1, BaseStats: MonsterStats{MaxHP: 50, ATK: 5, DEF: 2, Speed: 100}},
+	"monster_da_lang":  {ID: "monster_da_lang", Name: "Dã Lang", BaseLevel: 2, BaseStats: MonsterStats{MaxHP: 80, ATK: 12, DEF: 5, Speed: 110}},
+	"monster_truc_yeu": {ID: "monster_truc_yeu", Name: "Trúc Yêu", BaseLevel: 3, BaseStats: MonsterStats{MaxHP: 120, ATK: 8, DEF: 15, Speed: 80}},
+	"monster_son_tac":  {ID: "monster_son_tac", Name: "Sơn Tặc", BaseLevel: 4, BaseStats: MonsterStats{MaxHP: 150, ATK: 20, DEF: 10, Speed: 105}},
+	"monster_doc_xa":   {ID: "monster_doc_xa", Name: "Độc Xà", BaseLevel: 5, BaseStats: MonsterStats{MaxHP: 70, ATK: 25, DEF: 3, Speed: 130}},
 	// Bí Cảnh
-	"monster_huyet_bien_bat": {ID: "monster_huyet_bien_bat", Name: "Huyết Biển Bức", BaseLevel: 5, BaseStats: combat.CombatStats{MaxHP: 200, ATK: 30, DEF: 10, Speed: 140}},
-	"monster_thach_ma":       {ID: "monster_thach_ma", Name: "Thạch Ma", BaseLevel: 6, BaseStats: combat.CombatStats{MaxHP: 500, ATK: 15, DEF: 40, Speed: 70}},
-	"monster_am_linh":        {ID: "monster_am_linh", Name: "Âm Linh", BaseLevel: 6, BaseStats: combat.CombatStats{MaxHP: 180, ATK: 35, DEF: 5, Speed: 120}},
+	"monster_huyet_bien_bat": {ID: "monster_huyet_bien_bat", Name: "Huyết Biển Bức", BaseLevel: 5, BaseStats: MonsterStats{MaxHP: 200, ATK: 30, DEF: 10, Speed: 140}},
+	"monster_thach_ma":       {ID: "monster_thach_ma", Name: "Thạch Ma", BaseLevel: 6, BaseStats: MonsterStats{MaxHP: 500, ATK: 15, DEF: 40, Speed: 70}},
+	"monster_am_linh":        {ID: "monster_am_linh", Name: "Âm Linh", BaseLevel: 6, BaseStats: MonsterStats{MaxHP: 180, ATK: 35, DEF: 5, Speed: 120}},
 	// Boss
-	"boss_huyet_giap_yeu": {ID: "boss_huyet_giap_yeu", Name: "Huyết Giáp Yêu", Role: MonsterRoleBoss, BaseLevel: 10, BaseStats: combat.CombatStats{MaxHP: 2000, ATK: 80, DEF: 50, Speed: 90}},
+	"boss_huyet_giap_yeu": {ID: "boss_huyet_giap_yeu", Name: "Huyết Giáp Yêu", Role: MonsterRoleBoss, BaseLevel: 10, BaseStats: MonsterStats{MaxHP: 2000, ATK: 80, DEF: 50, Speed: 90}},
 }
 
 type MonsterPoolDefinition struct {

@@ -5,8 +5,6 @@ package pve
 import (
 	"math/rand"
 	"testing"
-
-	"github.com/whiskey/tu-tien-bot/internal/game/combat"
 )
 
 func TestPvERegistry(t *testing.T) {
@@ -64,7 +62,7 @@ func TestStageLimits(t *testing.T) {
 }
 
 func TestScaling(t *testing.T) {
-	base := combat.CombatStats{MaxHP: 100, ATK: 10, DEF: 5, Speed: 100}
+	base := MonsterStats{MaxHP: 100, ATK: 10, DEF: 5, Speed: 100}
 	stage1 := ScaleMonsterStats(base, 1, ActivityDuNgoan, MonsterRoleNormal, DefaultScalingConfig)
 	stage10 := ScaleMonsterStats(base, 10, ActivityDuNgoan, MonsterRoleNormal, DefaultScalingConfig)
 	stage30 := ScaleMonsterStats(base, 30, ActivityDuNgoan, MonsterRoleNormal, DefaultScalingConfig)
