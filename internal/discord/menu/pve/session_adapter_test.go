@@ -28,7 +28,7 @@ func TestBuildHPBar_ClampAndFormat(t *testing.T) {
 
 	// Test 4: Lỗi MaxHP 0
 	bar4 := BuildHPBar(10, 0)
-	if !strings.Contains(bar4, "**0%%** (0/0)") {
+	if !strings.Contains(bar4, "**0%** (0/0)") {
 		t.Errorf("Lỗi chia cho 0: %s", bar4)
 	}
 }

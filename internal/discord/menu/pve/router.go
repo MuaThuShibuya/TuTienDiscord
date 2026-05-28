@@ -15,6 +15,7 @@ import (
 	"github.com/whiskey/tu-tien-bot/internal/discord/ui"
 	"github.com/whiskey/tu-tien-bot/internal/discord/ui/emoji"
 	"github.com/whiskey/tu-tien-bot/internal/game/combat"
+	"github.com/whiskey/tu-tien-bot/internal/game/item"
 	"github.com/whiskey/tu-tien-bot/internal/game/pve"
 	"github.com/whiskey/tu-tien-bot/internal/game/pvecombat"
 )
@@ -23,11 +24,12 @@ type Router struct {
 	pvecombatSvc *pvecombat.Service
 	combatSvc    *combat.Service
 	pveRepo      pve.ProgressRepository
+	actionCache  *ActionCache
 	log          *zap.Logger
 }
 
 func NewRouter(pvecombatSvc *pvecombat.Service, combatSvc *combat.Service, pveRepo pve.ProgressRepository, log *zap.Logger) *Router {
-	return &Router{pvecombatSvc: pvecombatSvc, combatSvc: combatSvc, pveRepo: pveRepo, log: log.Named("menu.pve")}
+	return &Router{pvecombatSvc: pvecombatSvc, combatSvc: combatSvc, pveRepo: pveRepo, actionCache: NewActionCache(), log: log.Named("menu.pve")}
 }
 
 // formatCombatError dịch lỗi backend sang UI tu tiên
@@ -96,22 +98,24 @@ func (r *Router) HandlePvEInteraction(s *discordgo.Session, i *discordgo.Interac
 		r.renderCombatScreen(s, i, menuSession, cSession)
 
 	case menu.ActionPvEAttack:
-		parts := strings.SplitN(extra, "|", 2)
-		if len(parts) != 2 {
-			ui.EditEphemeralError(s, i, ui.MsgGenericError)
+		token := extra
+		payload, ok := r.actionCache.Get(token)
+		if !ok {
+			ui.EditEphemeralEmbed(s, i, ui.WarningEmbed("Cơ duyên đã tàn, pháp ấn đã mất hiệu lực. Hãy làm mới trận chiến."))
 			return
 		}
-		combatSessionID, targetID := parts[0], parts[1]
-		idempotencyKey := i.ID // Dùng Discord Interaction ID làm Nonce chống double click hoàn hảo
+		if payload.OwnerID != userID {
+			ui.EditEphemeralEmbed(s, i, ui.WarningEmbed("Thiên cơ đã định, đây không phải trận chiến của đạo hữu."))
+			return
+		}
 
 		r.log.Info("Xử lý lệnh Attack",
 			zap.String("userId", userID),
-			zap.String("sessionID", combatSessionID),
-			zap.String("targetID", targetID),
-			zap.String("idempotencyKey", idempotencyKey),
+			zap.String("sessionID", payload.CombatSessionID),
+			zap.String("targetID", payload.TargetID),
 		)
 
-		cSession, err := r.combatSvc.PlayerBasicAttack(ctx, userID, combatSessionID, targetID, idempotencyKey)
+		cSession, err := r.combatSvc.PlayerBasicAttack(ctx, userID, payload.CombatSessionID, payload.TargetID, i.ID)
 		if err != nil {
 			ui.EditEphemeralEmbed(s, i, ui.WarningEmbed(formatCombatError(err)))
 			return
@@ -124,8 +128,33 @@ func (r *Router) HandlePvEInteraction(s *discordgo.Session, i *discordgo.Interac
 		return
 
 	case menu.ActionPvEAuto:
-		ui.EditEphemeralEmbed(s, i, ui.WarningEmbed("Thần thức tự chiến chưa ổn định, cần hoàn thiện cảnh giới cao hơn."))
-		return
+		token := extra
+		payload, ok := r.actionCache.Get(token)
+		if !ok {
+			ui.EditEphemeralEmbed(s, i, ui.WarningEmbed("Cơ duyên đã tàn, pháp ấn mất hiệu lực."))
+			return
+		}
+
+		opts := pvecombat.AutoBattleOptions{
+			MaxActions:     5,
+			IdempotencyKey: i.ID,
+			PreferSkill:    false,
+		}
+
+		res, err := r.pvecombatSvc.AutoBattle(ctx, userID, payload.CombatSessionID, opts)
+		if err != nil {
+			ui.EditEphemeralEmbed(s, i, ui.WarningEmbed(formatCombatError(err)))
+			return
+		}
+
+		r.log.Info("AutoBattle hoàn tất", zap.Int("actionsTaken", res.ActionsTaken), zap.String("stoppedReason", res.StoppedReason))
+		r.renderCombatScreen(s, i, menuSession, res.Session)
+		if res.StoppedReason == "max_actions" {
+			_, _ = s.FollowupMessageCreate(i, true, &discordgo.WebhookParams{
+				Embeds: []*discordgo.MessageEmbed{ui.SuccessEmbed("Tự Động", "Thần thức tự chiến đã tạm dừng sau 5 nhịp, đạo hữu có thể tiếp tục.")},
+				Flags:  discordgo.MessageFlagsEphemeral,
+			})
+		}
 
 	case menu.ActionPvEEscape:
 		ui.EditEphemeralEmbed(s, i, ui.WarningEmbed("Độn thuật đang được nghiên cứu, hiện tại chỉ có tử chiến tới cùng!"))
@@ -155,11 +184,28 @@ func (r *Router) HandlePvEInteraction(s *discordgo.Session, i *discordgo.Interac
 			if c.IsBonus {
 				prefix = "[Hiếm] "
 			}
-			desc += fmt.Sprintf("- %s %s x%d\n", prefix, c.Type, c.Quantity)
+
+			// Phân giải hiển thị
+			displayName := c.RefID
+			switch c.Type {
+			case "exp":
+				displayName = "Tu vi"
+			case "stones":
+				displayName = "Linh thạch"
+			default:
+				if def, ok := item.GetDefinition(c.RefID); ok {
+					rarityMark := ""
+					if def.Rarity != "" && def.Rarity != "D" {
+						rarityMark = fmt.Sprintf(" [%s]", def.Rarity)
+					}
+					displayName = fmt.Sprintf("%s%s", def.Name, rarityMark)
+				}
+			}
+			desc += fmt.Sprintf("- %s %s x%d\n", prefix, displayName, c.Quantity)
 		}
 		embed := ui.SuccessEmbed("Phần Thưởng", desc)
 		comps := []discordgo.MessageComponent{
-			ui.ActionRow(ui.Button("Quay Lại", menu.Build(menu.DomainNav, menu.ActionRefresh, menuSession.SessionID, string(menu.PagePvE)), ui.BtnPrimary, nil, false)),
+			ui.ActionRow(ui.Button("Quay Lại", menu.Build(menu.DomainNav, menu.ActionRefresh, menuSession.SessionID, string(menu.PageMain)), ui.BtnPrimary, nil, false)),
 		}
 		_, _ = s.InteractionResponseEdit(i, &discordgo.WebhookEdit{Embeds: &[]*discordgo.MessageEmbed{embed}, Components: &comps})
 
@@ -206,7 +252,7 @@ func (r *Router) renderCombatScreen(s *discordgo.Session, i *discordgo.Interacti
 	}
 	vm := CombatSessionToViewModel(cSession, areaName)
 	embed := BuildCombatEmbed(vm)
-	comps := BuildCombatActionComponents(menuSession.SessionID, vm)
+	comps := BuildCombatActionComponents(r.actionCache, menuSession.SessionID, vm)
 
 	r.log.Debug("Edit UI Combat",
 		zap.String("embedType", "combat_active"),

@@ -37,7 +37,8 @@ type ClaimedReward struct {
 // CombatSession lưu toàn bộ state của trận đấu (Lưu MongoDB).
 type CombatSession struct {
 	ID                     string           `bson:"_id" json:"id"`
-	UserID                 string           `bson:"userId" json:"userId"` // Chủ phòng
+	UserID                 string           `bson:"userId" json:"userId"`   // Chủ phòng
+	GuildID                string           `bson:"guildId" json:"guildId"` // Nơi xảy ra trận chiến
 	AreaID                 string           `bson:"areaId" json:"areaId"`
 	ActivityType           string           `bson:"activityType" json:"activityType"`
 	Stage                  int              `bson:"stage" json:"stage"`

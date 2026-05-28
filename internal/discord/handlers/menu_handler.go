@@ -83,7 +83,8 @@ func (h *MenuHandler) Handle(s *discordgo.Session, i *discordgo.InteractionCreat
 	}
 
 	userID := i.Member.User.ID
-	guildID := i.GuildID
+	// ĐỒNG BỘ GLOBAL: Dữ liệu tu luyện, túi đồ, trang bị sẽ được dùng chung ở mọi server
+	guildID := ""
 	channelID := i.ChannelID
 
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
@@ -210,12 +211,24 @@ func (h *MenuHandler) loadCultivationPage(ctx context.Context, session *menu.Ses
 }
 
 func (h *MenuHandler) loadInventoryPage(ctx context.Context, session *menu.Session) (*discordgo.InteractionResponseData, error) {
+	h.log.Debug("Load inventory page",
+		zap.String("userId", session.UserID),
+		zap.String("sessionID", session.SessionID),
+		zap.String("page", string(session.CurrentPage)),
+	)
+
 	player, err := h.profileSvc.GetPlayer(ctx, session.UserID, session.GuildID)
 	if err != nil {
 		h.log.Error("loadInventoryPage failed", zap.String("step", "profile"), zap.Error(err))
 		return nil, err
 	}
+	h.log.Debug("Inventory loader: gọi backend", zap.String("userId", session.UserID))
 	_, items, err := h.inventorySvc.GetInventory(ctx, session.UserID, session.GuildID)
+	h.log.Debug("Inventory loader: backend trả kết quả",
+		zap.String("userId", session.UserID),
+		zap.Int("itemCount", len(items)),
+		zap.Error(err),
+	)
 	if err != nil {
 		if apperrors.IsNotFound(err) {
 			items = []*item.ItemInstance{} // Fix: Túi đồ trống không phải là lỗi
@@ -224,7 +237,15 @@ func (h *MenuHandler) loadInventoryPage(ctx context.Context, session *menu.Sessi
 			return nil, err
 		}
 	}
-	return invmenu.BuildMenuResponse(toInventoryMenuVM(session, player, items)), nil
+
+	vm := toInventoryMenuVM(session, player, items)
+	res := invmenu.BuildMenuResponse(vm)
+	h.log.Debug("loadInventoryPage success",
+		zap.Int("vmItems", len(vm.Items)),
+		zap.Int("embedCount", len(res.Embeds)),
+		zap.Int("componentCount", len(res.Components)),
+	)
+	return res, nil
 }
 
 func (h *MenuHandler) loadEquipmentPage(ctx context.Context, session *menu.Session) (*discordgo.InteractionResponseData, error) {
@@ -336,7 +357,7 @@ func toMainMenuVM(session *menu.Session, player *profile.Player, cult *cultivati
 
 	return &menu.MainMenuVM{
 		SessionID:    session.SessionID,
-		DaoName:      player.DaoName,
+		DaoName:      player.DaoName, // Tên này đã đẹp
 		RealmDisplay: fmt.Sprintf("%s tầng %d", cult.Realm.DisplayName(), cult.RealmLevel),
 		CombatPower:  utils.FormatNumber(cult.CombatPower),
 		MindState:    fmt.Sprintf("%s (%d/100)", cult.MindStateDisplayName(), cult.MindState),
@@ -412,6 +433,18 @@ func toInventoryMenuVM(session *menu.Session, player *profile.Player, items []*i
 		end = totalItems
 	}
 
+	logger.L().Debug("Inventory ViewModel pagination",
+		zap.String("userId", session.UserID),
+		zap.Int("totalItems", totalItems),
+		zap.Int("page", page),
+		zap.Int("pageSize", itemsPerPage),
+		zap.Int("start", start),
+		zap.Int("end", end),
+	)
+
+	unresolvedCount := 0
+	var sampleDefIDs []string
+
 	var itemVMs []menu.InventoryItemVM
 	for _, it := range items[start:end] {
 		vm := menu.InventoryItemVM{
@@ -420,14 +453,20 @@ func toInventoryMenuVM(session *menu.Session, player *profile.Player, items []*i
 			Quantity:   it.Quantity,
 		}
 		if def, ok := item.GetDefinition(it.DefinitionID); ok {
-			vm.Name = def.Name
+			vm.Name = def.Name // Đã lấy tên đẹp
 			vm.Rarity = string(def.Rarity)
 			vm.IsEquip = def.Type == item.TypeEquipment
 			vm.IsUsable = def.Usable
 		} else {
-			vm.Name = "Vật phẩm lỗi (" + it.DefinitionID + ")"
+			unresolvedCount++
+			vm.Name = "Chưa ghi trong Bảo Lục: " + it.DefinitionID
 			vm.Rarity = "D" // Tránh UI bị crash khi thiếu Rarity
 		}
+
+		if len(sampleDefIDs) < 3 {
+			sampleDefIDs = append(sampleDefIDs, it.DefinitionID)
+		}
+
 		itemVMs = append(itemVMs, vm)
 	}
 
@@ -449,16 +488,17 @@ func toInventoryMenuVM(session *menu.Session, player *profile.Player, items []*i
 		})
 	}
 
-	// Fix: Discord API sẽ báo lỗi 400 nếu Select Menu không có option nào.
-	// Nếu không có vật phẩm khả dụng, thêm 1 option giả để tránh lỗi hiển thị UI.
-	if len(usableVMs) == 0 {
-		usableVMs = append(usableVMs, menu.InventoryItemVM{
-			InstanceID: "empty",
-			Name:       "Không có vật phẩm khả dụng",
-			Quantity:   0,
-			Rarity:     "D",
-		})
-	}
+	logger.L().Debug("toInventoryMenuVM trace",
+		zap.Int("rawItems", totalItems),
+		zap.Int("start", start),
+		zap.Int("end", end),
+		zap.Int("visibleRangeItems", end-start),
+		zap.Int("mappedItems", len(itemVMs)),
+		zap.Int("usableItems", len(usableVMs)),
+		zap.Int("vmItems", len(itemVMs)),
+		zap.Int("unresolvedDefinitionCount", unresolvedCount),
+		zap.Strings("sampleDefinitionIDs", sampleDefIDs),
+	)
 
 	return &menu.InventoryMenuVM{
 		SessionID:   session.SessionID,
@@ -496,7 +536,7 @@ func toEquipmentMenuVM(
 		}
 		if it, found := instanceMap[instanceID]; found {
 			if def, ok := item.GetDefinition(it.DefinitionID); ok {
-				vm.Name = def.Name
+				vm.Name = def.Name // Đã lấy tên đẹp
 				vm.Rarity = string(def.Rarity)
 			} else {
 				vm.Name = "Lỗi: " + it.DefinitionID
@@ -541,20 +581,9 @@ func toEquipmentMenuVM(
 		vm.Equippable = append(vm.Equippable, menu.EquippableItemVM{
 			InstanceID:   it.InstanceID,
 			DefinitionID: it.DefinitionID,
-			Name:         def.Name,
+			Name:         def.Name, // Đã lấy tên đẹp
 			Rarity:       string(def.Rarity),
 			SlotName:     slotDisplayName(slot),
-		})
-	}
-
-	// Fix: Tránh lỗi Discord API khi Select Menu không có option.
-	if len(vm.Equippable) == 0 {
-		vm.Equippable = append(vm.Equippable, menu.EquippableItemVM{
-			InstanceID:   "empty",
-			DefinitionID: "empty",
-			Name:         "Không có trang bị khả dụng",
-			Rarity:       "D",
-			SlotName:     "Trống",
 		})
 	}
 

@@ -63,7 +63,7 @@ func (r *mongoCombatRepo) GetActiveSessionByUser(ctx context.Context, userID str
 
 func (r *mongoCombatRepo) UpdateSession(ctx context.Context, session *CombatSession) error {
 	session.UpdatedAt = time.Now().UTC()
-	filter := bson.M{"_id": session.ID}
+	filter := bson.M{"_id": session.ID, "userId": session.UserID} // Thêm userId để đảm bảo chỉ chủ sở hữu mới update được
 	update := bson.M{"$set": session}
 	res, err := r.col.UpdateOne(ctx, filter, update)
 	if err == nil && res.MatchedCount == 0 {

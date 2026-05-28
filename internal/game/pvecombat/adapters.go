@@ -13,6 +13,8 @@ import (
 	"github.com/whiskey/tu-tien-bot/internal/game/combat"
 	"github.com/whiskey/tu-tien-bot/internal/game/inventory"
 	"github.com/whiskey/tu-tien-bot/internal/game/pve"
+	"github.com/whiskey/tu-tien-bot/internal/logger"
+	"go.uber.org/zap"
 )
 
 // StatsAdapter gọi thẳng tới CharacterStats Pipeline
@@ -63,10 +65,16 @@ type GrantAdapter struct{ invSvc inventory.Service }
 func NewGrantAdapter(invSvc inventory.Service) RewardGrantService {
 	return &GrantAdapter{invSvc: invSvc}
 }
-func (a *GrantAdapter) GrantExp(ctx context.Context, userID string, amount int64) error { return nil } // TODO: Nối với Cultivation sau
+func (a *GrantAdapter) GrantExp(ctx context.Context, userID string, amount int64) error {
+	return nil
+} // TODO: Nối với Cultivation sau
 func (a *GrantAdapter) GrantStones(ctx context.Context, userID string, amount int64) error {
 	return nil
 } // TODO: Nối với Economy sau
 func (a *GrantAdapter) GrantItem(ctx context.Context, userID, defID string, quantity int64) error {
-	return a.invSvc.AddItem(ctx, userID, "", defID, quantity)
+	logger.L().Info("GrantAdapter: Trao vật phẩm",
+		zap.String("userId", userID),
+		zap.String("defId", defID),
+		zap.Int64("qty", quantity))
+	return a.invSvc.AddItem(ctx, userID, "", defID, quantity) // Truyền guildID rỗng để dùng kho global
 }

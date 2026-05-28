@@ -27,6 +27,7 @@ type CombatViewModel struct {
 	Turn      int
 
 	PlayerName  string
+	PlayerID    string
 	PlayerHPStr string // Bar + Text
 	PlayerRage  int64
 	PlayerStats combat.CombatStats

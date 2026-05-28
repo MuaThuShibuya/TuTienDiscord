@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"strconv"
 	"strings"
 	"time"
 
@@ -102,6 +103,15 @@ func (r *Router) Handle(s *discordgo.Session, i *discordgo.Interaction) {
 		return
 	}
 
+	userID := i.Member.User.ID
+
+	r.log.Debug("Menu router dispatch",
+		zap.String("domain", parsed.Domain),
+		zap.String("action", parsed.Action),
+		zap.String("sessionID", parsed.SessionID),
+		zap.String("userId", userID),
+	)
+
 	// KHÔNG defer các action mở Modal form
 	needsModal := strings.HasSuffix(parsed.Action, "_modal")
 
@@ -117,7 +127,6 @@ func (r *Router) Handle(s *discordgo.Session, i *discordgo.Interaction) {
 
 	// Từ đây dùng InteractionResponseEdit (cập nhật menu) và FollowupMessageCreate (ephemeral)
 	ctx := context.Background()
-	userID := i.Member.User.ID
 
 	// Xác thực chủ sở hữu phiên
 	session, err := r.sessionSvc.ValidateOwner(ctx, parsed.SessionID, userID)
@@ -262,11 +271,18 @@ func (r *Router) renderPage(s *discordgo.Session, i *discordgo.Interaction, sess
 		return
 	}
 
+	r.log.Debug("loader success", zap.String("page", string(page)))
+
 	comps := responseData.Components
-	_, _ = s.InteractionResponseEdit(i, &discordgo.WebhookEdit{
+	_, err = s.InteractionResponseEdit(i, &discordgo.WebhookEdit{
 		Embeds:     &responseData.Embeds,
 		Components: &comps,
 	})
+	if err != nil {
+		r.log.Error("InteractionResponseEdit fail", zap.String("page", string(page)), zap.Error(err))
+	} else {
+		r.log.Debug("InteractionResponseEdit success", zap.String("page", string(page)))
+	}
 }
 
 // --- Domain Handlers ---
@@ -442,13 +458,15 @@ func (r *Router) handleInventoryAction(s *discordgo.Session, i *discordgo.Intera
 
 	switch action {
 	case ActionInventoryPage:
-		// extra là số trang mới (string)
-		if extra == "" {
-			r.sendEphemeral(s, i, ui.ErrorEmbed(ui.MsgGenericError))
+		page, err := parseInventoryPageExtra(extra)
+		if err != nil {
+			r.log.Warn("Lỗi parse trang túi đồ", zap.String("extra", extra), zap.Error(err))
+			r.sendEphemeral(s, i, ui.WarningEmbed("Linh văn phân trang đã nhiễu loạn, hãy mở lại Túi Đồ."))
 			return
 		}
-		_ = r.sessionSvc.NavigateTo(ctx, session.SessionID, session.CurrentPage, extra)
-		session.CurrentCategory = extra
+		pageStr := fmt.Sprintf("%d", page)
+		_ = r.sessionSvc.NavigateTo(ctx, session.SessionID, session.CurrentPage, pageStr)
+		session.CurrentCategory = pageStr
 		r.renderPage(s, i, session, PageInventory)
 
 	case ActionInventoryUse:
@@ -529,6 +547,22 @@ func (r *Router) handleInventoryAction(s *discordgo.Session, i *discordgo.Intera
 	}
 }
 
+func parseInventoryPageExtra(extra string) (int, error) {
+	raw := extra
+	if strings.Contains(extra, ":") {
+		parts := strings.SplitN(extra, ":", 2)
+		if len(parts) != 2 {
+			return 0, fmt.Errorf("inventory page extra không hợp lệ: %s", extra)
+		}
+		raw = parts[1]
+	}
+	page, err := strconv.Atoi(raw)
+	if err != nil || page < 1 {
+		return 0, fmt.Errorf("inventory page không hợp lệ: %s", extra)
+	}
+	return page, nil
+}
+
 // handleEquipmentAction xử lý các action thuộc trang Trang Bị.
 func (r *Router) handleEquipmentAction(s *discordgo.Session, i *discordgo.Interaction, session *Session, action, extra string) {
 	ctx := context.Background()
@@ -539,6 +573,10 @@ func (r *Router) handleEquipmentAction(s *discordgo.Session, i *discordgo.Intera
 		data := i.MessageComponentData()
 		if len(data.Values) == 0 {
 			r.sendEphemeral(s, i, ui.ErrorEmbed(ui.MsgGenericError))
+			return
+		}
+		if data.Values[0] == "empty" {
+			r.sendEphemeral(s, i, ui.WarningEmbed("Không có trang bị nào phù hợp trong túi đồ."))
 			return
 		}
 		parts := strings.SplitN(data.Values[0], ":", 2)

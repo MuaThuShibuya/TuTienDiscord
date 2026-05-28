@@ -62,7 +62,8 @@ func (h *StartHandler) Handle(s *discordgo.Session, i *discordgo.InteractionCrea
 	}
 
 	userID := i.Member.User.ID
-	guildID := i.GuildID
+	// ĐỒNG BỘ GLOBAL: Bỏ qua GuildID của server, dùng chung 1 kho dữ liệu cho toàn bộ Discord
+	guildID := ""
 	username := i.Member.User.Username
 	displayName := i.Member.Nick
 	if displayName == "" {

@@ -13,13 +13,26 @@ import (
 	"github.com/whiskey/tu-tien-bot/internal/discord/menu"
 	"github.com/whiskey/tu-tien-bot/internal/discord/ui"
 	"github.com/whiskey/tu-tien-bot/internal/discord/ui/emoji"
+	"github.com/whiskey/tu-tien-bot/internal/logger"
+	"go.uber.org/zap"
 )
 
 // BuildMenuResponse tạo response Discord đầy đủ cho trang Túi Đồ.
 func BuildMenuResponse(vm *menu.InventoryMenuVM) *discordgo.InteractionResponseData {
+	embed := buildEmbed(vm)
+	comps := buildComponents(vm)
+
+	logger.L().Debug("BuildMenuResponse trace",
+		zap.Int("len(vm.Items)", len(vm.Items)),
+		zap.Int("len(vm.UsableItems)", len(vm.UsableItems)),
+		zap.Int("len(components)", len(comps)),
+		zap.Int("currentPage", vm.CurrentPage),
+		zap.Int("totalPages", vm.TotalPages),
+	)
+
 	return &discordgo.InteractionResponseData{
-		Embeds:     []*discordgo.MessageEmbed{buildEmbed(vm)},
-		Components: buildComponents(vm),
+		Embeds:     []*discordgo.MessageEmbed{embed},
+		Components: comps,
 	}
 }
 
@@ -28,7 +41,7 @@ func buildEmbed(vm *menu.InventoryMenuVM) *discordgo.MessageEmbed {
 
 	if len(vm.Items) == 0 {
 		if vm.TotalPages <= 1 {
-			desc += "_Túi đồ của đạo hữu hiện đang trống rỗng. Hãy đi rèn luyện để tìm kiếm kỳ ngộ!_"
+			desc += "_Túi càn khôn của đạo hữu hiện chưa có vật phẩm nào._"
 		} else {
 			desc += "_Trang này không có vật phẩm._"
 		}

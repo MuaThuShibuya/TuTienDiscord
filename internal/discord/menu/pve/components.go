@@ -31,7 +31,7 @@ func BuildAreaSelectComponents(menuSessionID string, vm PvEMenuViewModel) []disc
 	}
 }
 
-func BuildCombatActionComponents(menuSessionID string, vm CombatViewModel) []discordgo.MessageComponent {
+func BuildCombatActionComponents(cache *ActionCache, menuSessionID string, vm CombatViewModel) []discordgo.MessageComponent {
 	if vm.State == combat.StateWon {
 		return []discordgo.MessageComponent{
 			ui.ActionRow(
@@ -49,11 +49,20 @@ func BuildCombatActionComponents(menuSessionID string, vm CombatViewModel) []dis
 	}
 
 	// Đang đánh (StateOngoing)
-	// Truyền SessionID và TargetID. Nonce sẽ được lấy từ Discord Interaction ID ở Router.
-	attackID := menu.Build(menu.DomainPvE, menu.ActionPvEAttack, menuSessionID, vm.SessionID+"|"+vm.TargetID)
-	skillID := menu.Build(menu.DomainPvE, menu.ActionPvESkill, menuSessionID, vm.SessionID)
-	autoID := menu.Build(menu.DomainPvE, menu.ActionPvEAuto, menuSessionID, vm.SessionID)
-	escapeID := menu.Build(menu.DomainPvE, menu.ActionPvEEscape, menuSessionID, vm.SessionID)
+	// Gói payload vào RAM Cache, trả về token 8 ký tự
+	payload := PvEActionPayload{
+		OwnerID:         vm.PlayerID,
+		MenuSessionID:   menuSessionID,
+		CombatSessionID: vm.SessionID,
+		TargetID:        vm.TargetID,
+	}
+	atkToken := cache.Save(payload)
+	autoToken := cache.Save(payload)
+
+	attackID := menu.Build(menu.DomainPvE, menu.ActionPvEAttack, menuSessionID, atkToken)
+	skillID := menu.Build(menu.DomainPvE, menu.ActionPvESkill, menuSessionID, "dummy")
+	autoID := menu.Build(menu.DomainPvE, menu.ActionPvEAuto, menuSessionID, autoToken)
+	escapeID := menu.Build(menu.DomainPvE, menu.ActionPvEEscape, menuSessionID, "dummy")
 
 	return []discordgo.MessageComponent{
 		ui.ActionRow(

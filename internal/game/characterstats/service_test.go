@@ -12,6 +12,7 @@ import (
 	"github.com/whiskey/tu-tien-bot/internal/game/combat"
 	"github.com/whiskey/tu-tien-bot/internal/game/cultivation"
 	"github.com/whiskey/tu-tien-bot/internal/game/equipment"
+	"github.com/whiskey/tu-tien-bot/internal/logger"
 )
 
 // --- Fakes ---
@@ -41,6 +42,13 @@ type fakeEquipment struct {
 
 func (f *fakeEquipment) GetEffectiveStats(ctx context.Context, userID, guildID string) (equipment.CombatStats, error) {
 	return equipment.CombatStats{MaxHP: f.stats.MaxHP, ATK: f.stats.ATK, DEF: f.stats.DEF, CritRate: f.stats.CritRate}, nil
+}
+
+func TestMain(m *testing.M) {
+	if err := logger.Init(logger.Options{Level: "error", Format: "json"}); err != nil {
+		panic("logger init thất bại: " + err.Error())
+	}
+	m.Run()
 }
 
 // --- Tests ---

@@ -100,6 +100,15 @@ func main() {
 	}
 	idxCancel()
 
+	// --- 3.5 Validate Data Registry ---
+	starterItems := []string{"pill_exp_tu_khi_d", "pill_stm_hoi_luc_d", "eq_weapon_moc_kiem_d", "eq_armor_vai_tho_d", "mat_enhance_hac_thiet_d"}
+	for _, defID := range starterItems {
+		if _, ok := itempkg.GetDefinition(defID); !ok {
+			log.Fatal("CRITICAL: Thiếu definition vật phẩm tân thủ trong Registry", zap.String("defID", defID))
+		}
+	}
+	log.Info("Item Registry validation OK", zap.Int("starters_checked", len(starterItems)))
+
 	// Chạy Auto Migration (Tự động quét và vá lỗi dữ liệu trên DB)
 	migCtx, migCancel := context.WithTimeout(context.Background(), 30*time.Second)
 	if err := database.AutoMigrate(migCtx, db.DB()); err != nil {

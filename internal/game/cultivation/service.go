@@ -98,7 +98,7 @@ func (s *cultivationService) calculateStaminaRegen(ctx context.Context, prof *Cu
 }
 
 func (s *cultivationService) GetOrCreate(ctx context.Context, userID, guildID string) (*CultivationProfile, error) {
-	profile, err := s.repo.FindByUserID(ctx, userID, guildID)
+	profile, err := s.repo.FindByUserID(ctx, userID, "") // LUÔN DÙNG KHO GLOBAL
 	if err == nil {
 		_ = s.calculateStaminaRegen(ctx, profile)
 		return profile, nil
@@ -110,7 +110,7 @@ func (s *cultivationService) GetOrCreate(ctx context.Context, userID, guildID st
 	}
 
 	// Tạo hồ sơ mới với giá trị khởi đầu
-	newProfile := NewCultivationProfile(userID, guildID)
+	newProfile := NewCultivationProfile(userID, "") // LUÔN DÙNG KHO GLOBAL
 
 	if err := s.repo.Upsert(ctx, newProfile); err != nil {
 		s.log.Error("GetOrCreate: không tạo được hồ sơ tu luyện",
@@ -124,7 +124,7 @@ func (s *cultivationService) GetOrCreate(ctx context.Context, userID, guildID st
 }
 
 func (s *cultivationService) GetProfile(ctx context.Context, userID, guildID string) (*CultivationProfile, error) {
-	prof, err := s.repo.FindByUserID(ctx, userID, guildID)
+	prof, err := s.repo.FindByUserID(ctx, userID, "") // LUÔN DÙNG KHO GLOBAL
 	if err == nil {
 		_ = s.calculateStaminaRegen(ctx, prof)
 	}
@@ -334,7 +334,7 @@ func (s *cultivationService) Breakthrough(ctx context.Context, in BreakthroughIn
 		res.Message = "Đột phá thành công! Cảnh giới thăng cấp."
 	} else {
 		penaltyCost := cost / 2
-		if _, err := s.economySvc.SpendSpiritStones(ctx, in.UserID, in.GuildID, penaltyCost, "breakthrough_fail"); err != nil {
+		if _, err := s.economySvc.SpendSpiritStones(ctx, in.UserID, in.GuildID, penaltyCost, "breakthrough_failure_penalty"); err != nil {
 			return nil, err
 		}
 

@@ -18,7 +18,7 @@ func NewMongoRepository(db *mongo.Database) Repository {
 }
 
 func (r *mongoInventoryRepo) GetOrCreate(ctx context.Context, userID, guildID string) (*Inventory, error) {
-	filter := bson.M{"userId": userID, "guildId": guildID}
+	filter := bson.M{"userId": userID} // Global Scope: Bỏ qua guildID
 	update := bson.M{
 		"$setOnInsert": bson.M{
 			"userId":         userID,
@@ -39,7 +39,7 @@ func (r *mongoInventoryRepo) GetOrCreate(ctx context.Context, userID, guildID st
 
 func (r *mongoInventoryRepo) MarkStarterGranted(ctx context.Context, userID, guildID string) error {
 	// THÊM: Filter kiểm tra starterGranted == false để đảm bảo Atomic
-	filter := bson.M{"userId": userID, "guildId": guildID, "starterGranted": false}
+	filter := bson.M{"userId": userID, "starterGranted": false}
 	update := bson.M{"$set": bson.M{"starterGranted": true, "updatedAt": time.Now().UTC()}}
 	res, err := r.col.UpdateOne(ctx, filter, update)
 	if err != nil {
@@ -53,7 +53,7 @@ func (r *mongoInventoryRepo) MarkStarterGranted(ctx context.Context, userID, gui
 
 func (r *mongoInventoryRepo) AcquireSlot(ctx context.Context, userID, guildID string) error {
 	// So sánh trực tiếp slotUsage < slotLimit trên DB (Atomic)
-	filter := bson.M{"userId": userID, "guildId": guildID, "$expr": bson.M{"$lt": []interface{}{"$slotUsage", "$slotLimit"}}}
+	filter := bson.M{"userId": userID, "$expr": bson.M{"$lt": []interface{}{"$slotUsage", "$slotLimit"}}}
 	update := bson.M{"$inc": bson.M{"slotUsage": 1}, "$set": bson.M{"updatedAt": time.Now().UTC()}}
 	res, err := r.col.UpdateOne(ctx, filter, update)
 	if err != nil {
@@ -66,7 +66,7 @@ func (r *mongoInventoryRepo) AcquireSlot(ctx context.Context, userID, guildID st
 }
 
 func (r *mongoInventoryRepo) ReleaseSlot(ctx context.Context, userID, guildID string) error {
-	filter := bson.M{"userId": userID, "guildId": guildID, "slotUsage": bson.M{"$gt": 0}}
+	filter := bson.M{"userId": userID, "slotUsage": bson.M{"$gt": 0}}
 	update := bson.M{"$inc": bson.M{"slotUsage": -1}, "$set": bson.M{"updatedAt": time.Now().UTC()}}
 	_, err := r.col.UpdateOne(ctx, filter, update)
 	return err

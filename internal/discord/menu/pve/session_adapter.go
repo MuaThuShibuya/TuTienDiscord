@@ -50,6 +50,7 @@ func CombatSessionToViewModel(session *combat.CombatSession, areaName string) Co
 		State:        session.State,
 		Turn:         session.Turn,
 		PlayerName:   session.Player.Name,
+		PlayerID:     session.Player.ID,
 		PlayerHPStr:  BuildHPBar(session.Player.CurrentHP, session.Player.Stats.MaxHP),
 		PlayerRage:   session.Player.CurrentRage,
 		PlayerStats:  session.Player.Stats,

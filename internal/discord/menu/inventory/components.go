@@ -11,6 +11,8 @@ import (
 	"github.com/whiskey/tu-tien-bot/internal/discord/menu"
 	"github.com/whiskey/tu-tien-bot/internal/discord/ui"
 	"github.com/whiskey/tu-tien-bot/internal/discord/ui/emoji"
+	"github.com/whiskey/tu-tien-bot/internal/logger"
+	"go.uber.org/zap"
 )
 
 func buildComponents(vm *menu.InventoryMenuVM) []discordgo.MessageComponent {
@@ -51,20 +53,25 @@ func buildComponents(vm *menu.InventoryMenuVM) []discordgo.MessageComponent {
 		nextPage = vm.TotalPages
 	}
 
-	pageInfoID := menu.Build(menu.DomainNav, "pageinfo", vm.SessionID)
+	prevID := menu.Build(menu.DomainInventory, menu.ActionInventoryPage, vm.SessionID, fmt.Sprintf("prev:%d", prevPage))
+	nextID := menu.Build(menu.DomainInventory, menu.ActionInventoryPage, vm.SessionID, fmt.Sprintf("next:%d", nextPage))
+	pageInfoID := menu.Build(menu.DomainNav, "pageinfo", vm.SessionID, fmt.Sprintf("info:%d:%d", vm.CurrentPage, vm.TotalPages))
+
 	pageRow := ui.ActionRow(
-		ui.Button("◀ Trước",
-			menu.Build(menu.DomainInventory, menu.ActionInventoryPage, vm.SessionID, fmt.Sprintf("%d", prevPage)),
-			ui.BtnSecondary, nil, vm.CurrentPage <= 1),
-		ui.Button(fmt.Sprintf("Trang %d/%d", vm.CurrentPage, vm.TotalPages),
-			pageInfoID, ui.BtnSecondary, nil, true),
-		ui.Button("Sau ▶",
-			menu.Build(menu.DomainInventory, menu.ActionInventoryPage, vm.SessionID, fmt.Sprintf("%d", nextPage)),
-			ui.BtnSecondary, nil, vm.CurrentPage >= vm.TotalPages),
+		ui.Button("◀ Trước", prevID, ui.BtnSecondary, nil, vm.CurrentPage <= 1),
+		ui.Button(fmt.Sprintf("Trang %d/%d", vm.CurrentPage, vm.TotalPages), pageInfoID, ui.BtnSecondary, nil, true),
+		ui.Button("Sau ▶", nextID, ui.BtnSecondary, nil, vm.CurrentPage >= vm.TotalPages),
 	)
 	components = append(components, pageRow)
 
 	// Hàng cuối: Điều hướng
 	components = append(components, ui.NavRow(vm.SessionID, string(menu.PageInventory), string(menu.PageMain)))
+
+	logger.L().Debug("Inventory components trace",
+		zap.Int("componentRows", len(components)),
+		zap.Int("currentPage", vm.CurrentPage),
+		zap.Int("totalPages", vm.TotalPages),
+	)
+
 	return components
 }

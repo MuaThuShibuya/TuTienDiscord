@@ -35,7 +35,7 @@ func (h *DevHandler) Handle(s *discordgo.Session, i *discordgo.InteractionCreate
 	}
 
 	ctx := context.Background()
-	session, err := h.sessionSvc.OpenMenu(ctx, i.Member.User.ID, i.GuildID, i.ChannelID, h.cfg.Menu.SessionTTL)
+	session, err := h.sessionSvc.OpenMenu(ctx, i.Member.User.ID, "", i.ChannelID, h.cfg.Menu.SessionTTL)
 	if err != nil {
 		h.log.Error("Không thể tạo session admin", zap.Error(err))
 		_ = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{

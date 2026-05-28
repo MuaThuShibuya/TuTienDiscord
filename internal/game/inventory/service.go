@@ -38,7 +38,13 @@ func (s *inventoryService) GetInventory(ctx context.Context, userID, guildID str
 	if err != nil {
 		return nil, nil, err
 	}
+	logger.L().Debug("InventoryService.GetInventory", zap.String("userId", userID), zap.String("guildId", guildID))
 	items, err := s.itemRepo.GetInstancesByUser(ctx, userID, guildID)
+	logger.L().Debug("InventoryRepository result",
+		zap.String("userId", userID),
+		zap.Int("loadedCount", len(items)),
+		zap.Error(err),
+	)
 	return inv, items, err
 }
 
@@ -160,11 +166,23 @@ func (s *inventoryService) GrantStarterItems(ctx context.Context, userID, guildI
 		return nil
 	}
 
-	_ = s.AddItem(ctx, userID, guildID, "pill_exp_tu_khi_d", 3)
-	_ = s.AddItem(ctx, userID, guildID, "pill_stm_hoi_luc_d", 2)
-	_ = s.AddItem(ctx, userID, guildID, "eq_weapon_moc_kiem_d", 1)
-	_ = s.AddItem(ctx, userID, guildID, "eq_armor_vai_tho_d", 1)
-	_ = s.AddItem(ctx, userID, guildID, "mat_enhance_hac_thiet_d", 3)
+	var hasError bool
+	grant := func(defID string, qty int64) {
+		if err := s.AddItem(ctx, userID, guildID, defID, qty); err != nil {
+			logger.L().Error("Lỗi cấp vật phẩm tân thủ", zap.String("userId", userID), zap.String("defID", defID), zap.Error(err))
+			hasError = true
+		}
+	}
+
+	grant("pill_exp_tu_khi_d", 3)
+	grant("pill_stm_hoi_luc_d", 2)
+	grant("eq_weapon_moc_kiem_d", 1)
+	grant("eq_armor_vai_tho_d", 1)
+	grant("mat_enhance_hac_thiet_d", 3)
+
+	if hasError {
+		return fmt.Errorf("không thể khởi tạo đủ vật phẩm tân thủ")
+	}
 
 	return s.invRepo.MarkStarterGranted(ctx, userID, guildID)
 }
