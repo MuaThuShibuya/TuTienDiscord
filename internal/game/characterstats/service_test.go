@@ -3,6 +3,8 @@ package characterstats_test
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/whiskey/tu-tien-bot/internal/game/aptitude"
@@ -25,10 +27,11 @@ func (f *fakeAptitude) GetProfile(ctx context.Context, userID string) (*aptitude
 type fakeCultivation struct {
 	cultivation.Service
 	prof *cultivation.CultivationProfile
+	err  error
 }
 
 func (f *fakeCultivation) GetProfile(ctx context.Context, userID, guildID string) (*cultivation.CultivationProfile, error) {
-	return f.prof, nil
+	return f.prof, f.err
 }
 
 type fakeEquipment struct {
@@ -41,6 +44,36 @@ func (f *fakeEquipment) GetEffectiveStats(ctx context.Context, userID, guildID s
 }
 
 // --- Tests ---
+
+func TestGetEffectiveStats_MissingAptitudeReturnsClearError(t *testing.T) {
+	fApt := &fakeAptitude{def: nil}
+	fCult := &fakeCultivation{prof: &cultivation.CultivationProfile{Realm: "ngung_khi", RealmLevel: 1}}
+	fEq := &fakeEquipment{}
+	svc := characterstats.NewPipelineService(fApt, fCult, fEq)
+	_, err := svc.GetEffectiveStats(context.Background(), "u1")
+	if err == nil {
+		t.Fatal("Phải trả về lỗi")
+	}
+	if !strings.Contains(err.Error(), "missing aptitude") || !strings.Contains(err.Error(), "u1") {
+		t.Errorf("Lỗi không chứa thông tin cần thiết: %v", err)
+	}
+}
+
+func TestGetEffectiveStats_MissingCultivationReturnsClearError(t *testing.T) {
+	apt := aptitude.Registry["apt_pham_tu"]
+	fApt := &fakeAptitude{def: &apt}
+	fCult := &fakeCultivation{prof: nil, err: fmt.Errorf("not found")}
+	fEq := &fakeEquipment{}
+	svc := characterstats.NewPipelineService(fApt, fCult, fEq)
+	_, err := svc.GetEffectiveStats(context.Background(), "u1")
+	if err == nil {
+		t.Fatal("Phải trả về lỗi")
+	}
+	if !strings.Contains(err.Error(), "missing cultivation") || !strings.Contains(err.Error(), "u1") {
+		t.Errorf("Lỗi không chứa thông tin cần thiết: %v", err)
+	}
+}
+
 func TestEffectiveStats_NoEquipmentStillPositive(t *testing.T) {
 	apt := aptitude.Registry["apt_pham_tu"]
 	fApt := &fakeAptitude{def: &apt}

@@ -119,14 +119,17 @@ func (s *equipmentService) GetEffectiveStats(ctx context.Context, userID, guildI
 		return stats, err
 	}
 
-	for _, instID := range eq.Slots {
+	for slot, instID := range eq.Slots {
+		if instID == "" {
+			continue
+		}
 		inst, err := s.itemRepo.GetInstanceByID(ctx, instID, userID, guildID)
 		if err != nil {
-			continue
+			return stats, fmt.Errorf("equipped item instance missing: user=%s, slot=%s, itemID=%s", userID, slot, instID)
 		}
 		def, ok := item.GetDefinition(inst.DefinitionID)
 		if !ok || def.Stats == nil {
-			continue
+			return stats, fmt.Errorf("equipped item definition missing: user=%s, slot=%s, itemID=%s, definitionID=%s", userID, slot, instID, inst.DefinitionID)
 		}
 
 		level := 0

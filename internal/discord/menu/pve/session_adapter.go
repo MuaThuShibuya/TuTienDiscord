@@ -3,9 +3,9 @@ package pve
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/whiskey/tu-tien-bot/internal/game/combat"
+	"github.com/whiskey/tu-tien-bot/pkg/utils"
 )
 
 // FormatNumber thêm dấu phẩy phân cách hàng nghìn.
@@ -27,7 +27,7 @@ func FormatNumber(n int64) string {
 // BuildHPBar sinh ra thanh HP trực quan (10 blocks) kèm phần trăm và text.
 func BuildHPBar(current, max int64) string {
 	if max <= 0 {
-		return "`🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥` 0% (0/0)"
+		return fmt.Sprintf("`%s` **0%%** (0/0)", utils.ProgressBar(0, 1, 10))
 	}
 	if current < 0 {
 		current = 0
@@ -38,12 +38,7 @@ func BuildHPBar(current, max int64) string {
 
 	percent := float64(current) / float64(max)
 	percentInt := int(percent * 100)
-	filled := int(percentInt / 10)
-	if current > 0 && filled == 0 {
-		filled = 1 // Vẫn còn sống thì ít nhất 1 vạch
-	}
-
-	bar := strings.Repeat("🟩", filled) + strings.Repeat("🟥", 10-filled)
+	bar := utils.ProgressBar(int(current), int(max), 10)
 	return fmt.Sprintf("`%s` **%d%%** (%s/%s)", bar, percentInt, FormatNumber(current), FormatNumber(max))
 }
 
@@ -57,6 +52,7 @@ func CombatSessionToViewModel(session *combat.CombatSession, areaName string) Co
 		PlayerName:   session.Player.Name,
 		PlayerHPStr:  BuildHPBar(session.Player.CurrentHP, session.Player.Stats.MaxHP),
 		PlayerRage:   session.Player.CurrentRage,
+		PlayerStats:  session.Player.Stats,
 		IsPlayerTurn: session.IsPlayerTurn(),
 	}
 
@@ -64,7 +60,7 @@ func CombatSessionToViewModel(session *combat.CombatSession, areaName string) Co
 		isDead := e.CurrentHP <= 0
 		vm.Enemies = append(vm.Enemies, EnemyViewModel{
 			ID: e.ID, Name: e.Name, Level: e.Level,
-			HPStr: BuildHPBar(e.CurrentHP, e.Stats.MaxHP), IsDead: isDead,
+			HPStr: BuildHPBar(e.CurrentHP, e.Stats.MaxHP), IsDead: isDead, Stats: e.Stats,
 		})
 		if !isDead && vm.TargetID == "" {
 			vm.TargetID = e.ID // Auto-target con đầu tiên sống

@@ -40,7 +40,7 @@ func TestResetUser_PreviewDoesNotMutate(t *testing.T) {
 	// Theo quy tắc MongoDB an toàn, PreviewReset chỉ gọi CountDocuments, không có toán tử Delete/Update.
 	// Test này pass by design dựa trên method CountDocuments của MongoDB driver.
 	opts := ResetOptions{Scope: ResetScopeUser, TargetUserID: "12345", DryRun: true}
-	if opts.Scope != ResetScopeUser {
+	if opts.Scope != ResetScopeUser || opts.TargetUserID == "" || !opts.DryRun {
 		t.Errorf("Scope mismatch")
 	}
 }
@@ -92,7 +92,7 @@ func TestResetUser_RejectEmptyTarget(t *testing.T) {
 
 func TestResetAll_PreviewDoesNotMutate(t *testing.T) {
 	opts := ResetOptions{Scope: ResetScopeAll, DryRun: true}
-	if opts.Scope != ResetScopeAll {
+	if opts.Scope != ResetScopeAll || !opts.DryRun {
 		t.Errorf("Scope mismatch")
 	}
 }

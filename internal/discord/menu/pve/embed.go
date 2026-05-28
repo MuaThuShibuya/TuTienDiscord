@@ -45,9 +45,22 @@ func BuildCombatEmbed(vm CombatViewModel) *discordgo.MessageEmbed {
 		Color: ui.ColorCombat,
 	}
 
+	// Current Turn Indicator
+	turnDesc := ""
+	if vm.State == combat.StateActive {
+		if vm.IsPlayerTurn {
+			turnDesc = "\n> " + emoji.Sword.String() + " **Lượt của đạo hữu! Hãy xuất chiêu.**"
+		} else {
+			turnDesc = "\n> ⏳ *Yêu vật đang vận khởi yêu khí...*"
+		}
+	}
+	if turnDesc != "" {
+		embed.Description = turnDesc
+	}
+
 	// Status Player
-	playerStatus := fmt.Sprintf("%s **%s**\n%s\n%s Nộ khí: %d/100",
-		emoji.Profile.String(), vm.PlayerName, vm.PlayerHPStr, emoji.CombatPower.String(), vm.PlayerRage)
+	playerStatus := fmt.Sprintf("%s **%s**\n%s\n%s Nộ khí: %d/100\n*ATK: %s | DEF: %s | Tốc: %s*",
+		emoji.Profile.String(), vm.PlayerName, vm.PlayerHPStr, emoji.CombatPower.String(), vm.PlayerRage, FormatNumber(vm.PlayerStats.ATK), FormatNumber(vm.PlayerStats.DEF), FormatNumber(vm.PlayerStats.Speed))
 	embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{Name: "Đạo Hữu", Value: playerStatus, Inline: false})
 
 	// Status Enemies
@@ -61,7 +74,7 @@ func BuildCombatEmbed(vm CombatViewModel) *discordgo.MessageEmbed {
 		if vm.TargetID == e.ID && !e.IsDead {
 			targetMark = " " + emoji.Sword.String() + " *(Mục tiêu)*"
 		}
-		enemyStrs = append(enemyStrs, fmt.Sprintf("%s **%s** (Lv.%d)%s\n%s", icon, e.Name, e.Level, targetMark, e.HPStr))
+		enemyStrs = append(enemyStrs, fmt.Sprintf("%s **%s** (Lv.%d)%s\n%s\n*ATK: %s | DEF: %s | Tốc: %s*", icon, e.Name, e.Level, targetMark, e.HPStr, FormatNumber(e.Stats.ATK), FormatNumber(e.Stats.DEF), FormatNumber(e.Stats.Speed)))
 	}
 	embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{Name: "Kẻ Địch Yêu Khí", Value: strings.Join(enemyStrs, "\n\n"), Inline: false})
 

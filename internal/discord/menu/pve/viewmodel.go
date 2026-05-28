@@ -29,6 +29,7 @@ type CombatViewModel struct {
 	PlayerName  string
 	PlayerHPStr string // Bar + Text
 	PlayerRage  int64
+	PlayerStats combat.CombatStats
 
 	Enemies      []EnemyViewModel
 	Logs         []string
@@ -42,6 +43,7 @@ type EnemyViewModel struct {
 	Level  int
 	HPStr  string // Bar + Text
 	IsDead bool
+	Stats  combat.CombatStats
 }
 
 type CombatRewardViewModel struct {

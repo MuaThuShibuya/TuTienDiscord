@@ -97,17 +97,12 @@ func (h *StartHandler) Handle(s *discordgo.Session, i *discordgo.InteractionCrea
 		return
 	}
 
-	// Cấp quà tân thủ (Túi đồ, Đan dược, Kiếm gỗ)
-	_ = h.inventorySvc.GrantStarterItems(ctx, userID, guildID)
-
 	// Kiểm tra người chơi đã đăng ký trước đó chưa (CreatedAt cách đây trên 5 giây)
 	isNewPlayer := player.CreatedAt.After(time.Now().Add(-5 * time.Second))
 
-	if !isNewPlayer {
-		ui.EditEphemeralEmbed(s, i.Interaction, ui.WarningEmbed(
-			fmt.Sprintf("Đạo hữu **%s** đã đăng ký trước đó rồi!\nHãy dùng `/menu` để tiếp tục hành trình.", player.DaoName),
-		))
-		return
+	if isNewPlayer {
+		// Cấp quà tân thủ (Túi đồ, Đan dược, Kiếm gỗ)
+		_ = h.inventorySvc.GrantStarterItems(ctx, userID, guildID)
 	}
 
 	// 2. Khởi tạo hồ sơ tu luyện
@@ -124,11 +119,22 @@ func (h *StartHandler) Handle(s *discordgo.Session, i *discordgo.InteractionCrea
 		h.log.Warn("/start: GetOrCreate wallet thất bại (không fatal)", zap.String("userId", userID), zap.Error(err))
 	}
 
-	// 4. Roll Tư Chất cho tân thủ
-	_, aptDef, _ := h.aptitudeSvc.RollForNewCharacter(ctx, userID)
+	// 4. Roll Tư Chất cho tân thủ (hoặc cấp bù cho cựu binh bị thiếu)
+	_, aptDef, err := h.aptitudeSvc.GetProfile(ctx, userID)
+	if err != nil || aptDef == nil {
+		_, aptDef, _ = h.aptitudeSvc.RollForNewCharacter(ctx, userID)
+	}
+
 	aptName := "Phàm Tư"
 	if aptDef != nil {
 		aptName = aptDef.Name
+	}
+
+	if !isNewPlayer {
+		ui.EditEphemeralEmbed(s, i.Interaction, ui.WarningEmbed(
+			fmt.Sprintf("Đạo hữu **%s** đã đăng ký trước đó rồi!\nHãy dùng `/menu` để tiếp tục hành trình.", player.DaoName),
+		))
+		return
 	}
 
 	// 5. Gửi thông báo chào mừng

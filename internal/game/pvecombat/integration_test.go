@@ -82,7 +82,7 @@ func setupIntegrationEnv() (*Service, *fakeGrantService, *fakeRepo, *integration
 	repo := newFakeRepo()
 	grantSvc := newFakeGrant()
 	pveProv := &integrationPvEProvider{}
-	statsProv := &fakeStatsProvider{stats: combat.CombatStats{MaxHP: 1000, Speed: 100}}
+	statsProv := &fakeStatsProvider{stats: combat.CombatStats{MaxHP: 1000, ATK: 50, Speed: 100}}
 
 	svc, _ := NewService(repo, statsProv, pveProv, grantSvc, combat.NewTurnOrderService(), rand.New(rand.NewSource(1)), zap.NewNop())
 	return svc, grantSvc, repo, pveProv

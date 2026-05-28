@@ -62,11 +62,17 @@ func (s *adminSvc) PreviewMigration(ctx context.Context) (string, error) {
 	countLK, _ := cultCol.CountDocuments(ctx, bson.M{"realm": "Luyện Khí"})
 	countLDK, _ := cultCol.CountDocuments(ctx, bson.M{"realm": "Linh Động Kỳ"})
 	countKD, _ := cultCol.CountDocuments(ctx, bson.M{"realm": bson.M{"$in": []string{"Kim Đan", "Kết Đan"}}})
+	countInvalidLevel, _ := cultCol.CountDocuments(ctx, bson.M{"realmLevel": bson.M{"$lt": 1}})
 
 	// Đếm user thiếu tư chất (Aptitude)
-	// Giả định collection là "users" hoặc "profiles" có nhúng aptitude
 	profileCol := s.db.Collection("profiles")
-	countNoAptitude, _ := profileCol.CountDocuments(ctx, bson.M{"aptitude": bson.M{"$exists": false}})
+	aptCol := s.db.Collection("aptitudes")
+	totalProfiles, _ := profileCol.CountDocuments(ctx, bson.M{})
+	totalAptitudes, _ := aptCol.CountDocuments(ctx, bson.M{})
+	countNoAptitude := totalProfiles - totalAptitudes
+	if countNoAptitude < 0 {
+		countNoAptitude = 0
+	}
 
 	// Đếm combat session treo
 	combatCol := s.db.Collection("combat_sessions")
@@ -78,9 +84,10 @@ func (s *adminSvc) PreviewMigration(ctx context.Context) (string, error) {
 	report := fmt.Sprintf("Thiên Cơ Soi Chiếu (Dry-run):\n"+
 		"- Luyện Khí / Linh Động Kỳ (cũ): %d\n"+
 		"- Kim Đan / Kết Đan (cũ): %d\n"+
+		"- Tầng (Level) không hợp lệ (<1): %d\n"+
 		"- Hồ sơ thiếu Tư Chất: %d\n"+
 		"- Combat session hết hạn cần dọn: %d",
-		countLK+countLDK, countKD, countNoAptitude, countExpiredCombat)
+		countLK+countLDK, countKD, countInvalidLevel, countNoAptitude, countExpiredCombat)
 
 	return report, nil
 }
@@ -97,6 +104,9 @@ func (s *adminSvc) ApplyMigration(ctx context.Context, adminID string) (string, 
 	res2, _ := cultCol.UpdateMany(ctx, bson.M{"realm": bson.M{"$in": []string{"Kim Đan", "Kết Đan"}}}, bson.M{"$set": bson.M{"realm": "ket_dan"}})
 	totalUpdated += res2.ModifiedCount
 
+	res4, _ := cultCol.UpdateMany(ctx, bson.M{"realmLevel": bson.M{"$lt": 1}}, bson.M{"$set": bson.M{"realmLevel": 1}})
+	totalUpdated += res4.ModifiedCount
+
 	// Dọn dẹp combat
 	combatCol := s.db.Collection("combat_sessions")
 	res3, _ := combatCol.DeleteMany(ctx, bson.M{
@@ -104,7 +114,8 @@ func (s *adminSvc) ApplyMigration(ctx context.Context, adminID string) (string, 
 		"status":    bson.M{"$ne": "won"},
 	})
 
-	// TODO: Hàm sinh tư chất ngẫu nhiên cho user thiếu (gọi từ aptitude service nếu có)
+	// TODO: Hàm sinh tư chất ngẫu nhiên cho user thiếu cần gọi qua aptitude service.
+	// Hiện tại không có aptitudeSvc ở adminSvc, vì vậy user cũ thiếu tư chất sẽ tự động được cấp khi gõ lệnh /start.
 
 	report := fmt.Sprintf("Chuẩn hóa thành công:\n- Đã sửa %d cảnh giới cũ.\n- Đã dọn %d combat session rác.", totalUpdated, res3.DeletedCount)
 

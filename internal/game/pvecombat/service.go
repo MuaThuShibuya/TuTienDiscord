@@ -102,16 +102,25 @@ func (s *Service) StartPvECombat(ctx context.Context, userID, areaID string) (*c
 		return nil, fmt.Errorf("lỗi kiểm tra trận đấu cũ: %w", err)
 	}
 	if activeSession != nil {
-		return activeSession, nil
+		// Tự động thanh tẩy Ghost Session từ phiên bản cũ (ID quá dài gây crash Discord UI)
+		if len(activeSession.ID) > 25 {
+			s.log.Warn("Phát hiện tàn trận có ID quá dài, tiến hành hủy bỏ để tạo trận mới", zap.String("old_id", activeSession.ID))
+			activeSession.State = combat.StateLost
+			_ = s.repo.UpdateSession(ctx, activeSession)
+		} else {
+			return activeSession, nil
+		}
 	}
 
 	// 2. Lấy chỉ số chiến đấu
+	s.log.Debug("StartPvECombat: gọi GetEffectiveStats", zap.String("userId", userID))
 	stats, err := s.statsProvider.GetEffectiveStats(ctx, userID)
+	s.log.Debug("StartPvECombat: GetEffectiveStats xong", zap.String("userId", userID), zap.Error(err))
 	if err != nil {
-		return nil, fmt.Errorf("không thể lấy chỉ số chiến đấu: %w", err)
+		return nil, fmt.Errorf("không thể lấy chỉ số chiến đấu: user=%s reason=%w", userID, err)
 	}
-	if stats.MaxHP <= 0 {
-		debugInfo := fmt.Sprintf("invalid combat stats: user=%s hp=%d atk=%d def=%d speed=%d cp=%d. Đã kiểm tra qua CharacterStats Pipeline.", userID, stats.MaxHP, stats.ATK, stats.DEF, stats.Speed, stats.CombatPower)
+	if stats.MaxHP <= 0 || stats.ATK <= 0 || stats.Speed <= 0 {
+		debugInfo := fmt.Sprintf("invalid combat stats: user=%s hp=%d atk=%d def=%d speed=%d cp=%d", userID, stats.MaxHP, stats.ATK, stats.DEF, stats.Speed, stats.CombatPower)
 		s.log.Warn("Từ chối tạo trận do chỉ số lỗi", zap.String("userId", userID), zap.Any("stats", stats))
 		return nil, fmt.Errorf("%w: %s", combat.ErrInvalidCombatStats, debugInfo)
 	}
@@ -182,7 +191,8 @@ func (s *Service) StartPvECombat(ctx context.Context, userID, areaID string) (*c
 
 	// 7. Tạo Session
 	now := s.now().UTC()
-	sessionID := fmt.Sprintf("ss_%s_%d", userID, now.UnixNano())
+	// Rút ngắn ID bằng Hex (từ 43 -> 19 ký tự), tránh lỗi vượt quá 100 ký tự CustomID của Discord UI
+	sessionID := fmt.Sprintf("ss_%x", now.UnixNano())
 
 	session := &combat.CombatSession{
 		ID:                     sessionID,

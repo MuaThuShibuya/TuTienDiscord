@@ -146,7 +146,7 @@ func newTestService(
 
 func TestStartPvECombat_Success(t *testing.T) {
 	repo := newFakeRepo()
-	stats := &fakeStatsProvider{stats: combat.CombatStats{MaxHP: 1000, Speed: 120}}
+	stats := &fakeStatsProvider{stats: combat.CombatStats{MaxHP: 1000, ATK: 50, Speed: 120}}
 	pveProv := &fakePvEProvider{
 		area:      pve.PvEAreaDefinition{ID: "area_1", Name: "Rừng Trúc", ActivityType: pve.ActivityDuNgoan},
 		nextStage: 1,
@@ -225,7 +225,7 @@ func TestStartPvECombat_RejectInvalidStats(t *testing.T) {
 
 func TestStartPvECombat_RejectEmptyEncounter(t *testing.T) {
 	repo := newFakeRepo()
-	stats := &fakeStatsProvider{stats: combat.CombatStats{MaxHP: 100}}
+	stats := &fakeStatsProvider{stats: combat.CombatStats{MaxHP: 100, ATK: 10, Speed: 90}}
 	pveProv := &fakePvEProvider{
 		encounter: &pve.EncounterDefinition{Enemies: []pve.Enemy{}},
 	}
@@ -240,7 +240,7 @@ func TestStartPvECombat_RejectEmptyEncounter(t *testing.T) {
 
 func TestStartPvECombat_EnemyLimit(t *testing.T) {
 	repo := newFakeRepo()
-	stats := &fakeStatsProvider{stats: combat.CombatStats{MaxHP: 100}}
+	stats := &fakeStatsProvider{stats: combat.CombatStats{MaxHP: 100, ATK: 10, Speed: 90}}
 
 	enemies := make([]pve.Enemy, 10)
 	for i := 0; i < 10; i++ {
@@ -256,5 +256,19 @@ func TestStartPvECombat_EnemyLimit(t *testing.T) {
 
 	if err != combat.ErrEnemyLimitExceeded {
 		t.Errorf("Mong đợi lỗi vượt quá số lượng địch, nhận %v", err)
+	}
+}
+
+func TestStartPvECombat_StatsProviderErrorIncludesContext(t *testing.T) {
+	repo := newFakeRepo()
+	stats := &fakeStatsProvider{err: errors.New("missing aptitude")}
+	svc := newTestService(repo, stats, &fakePvEProvider{}, nil)
+
+	_, err := svc.StartPvECombat(context.Background(), "u1", "area_1")
+	if err == nil {
+		t.Fatal("Mong đợi lỗi nhưng nhận nil")
+	}
+	if !strings.Contains(err.Error(), "user=u1") || !strings.Contains(err.Error(), "missing aptitude") {
+		t.Errorf("Error thiếu context, nhận: %v", err)
 	}
 }

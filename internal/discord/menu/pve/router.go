@@ -68,6 +68,11 @@ func (r *Router) HandlePvEInteraction(s *discordgo.Session, i *discordgo.Interac
 		r.renderAreaSelect(s, i, menuSession, isBiCanh)
 
 	case menu.ActionPvEStart:
+		r.log.Info("Nhận action bắt đầu PvE",
+			zap.String("userId", userID),
+			zap.String("customID", i.MessageComponentData().CustomID),
+			zap.String("sessionID_menu", menuSession.SessionID),
+		)
 		data := i.MessageComponentData()
 		if len(data.Values) == 0 {
 			ui.EditEphemeralError(s, i, ui.MsgGenericError)
@@ -77,10 +82,17 @@ func (r *Router) HandlePvEInteraction(s *discordgo.Session, i *discordgo.Interac
 
 		cSession, err := r.pvecombatSvc.StartPvECombat(ctx, userID, areaID)
 		if err != nil {
+			r.log.Error("StartPvECombat lỗi", zap.String("userId", userID), zap.Error(err))
 			ui.EditEphemeralError(s, i, fmt.Sprintf("Không thể khởi tạo ải: %v", err))
 			return
 		}
 
+		r.log.Info("StartPvECombat thành công, chuẩn bị render UI",
+			zap.String("combatSessionID", cSession.ID),
+			zap.Int("stage", cSession.Stage),
+			zap.Int("enemyCount", len(cSession.Enemies)),
+			zap.String("state", string(cSession.State)),
+		)
 		r.renderCombatScreen(s, i, menuSession, cSession)
 
 	case menu.ActionPvEAttack:
@@ -92,11 +104,19 @@ func (r *Router) HandlePvEInteraction(s *discordgo.Session, i *discordgo.Interac
 		combatSessionID, targetID := parts[0], parts[1]
 		idempotencyKey := i.ID // Dùng Discord Interaction ID làm Nonce chống double click hoàn hảo
 
+		r.log.Info("Xử lý lệnh Attack",
+			zap.String("userId", userID),
+			zap.String("sessionID", combatSessionID),
+			zap.String("targetID", targetID),
+			zap.String("idempotencyKey", idempotencyKey),
+		)
+
 		cSession, err := r.combatSvc.PlayerBasicAttack(ctx, userID, combatSessionID, targetID, idempotencyKey)
 		if err != nil {
 			ui.EditEphemeralEmbed(s, i, ui.WarningEmbed(formatCombatError(err)))
 			return
 		}
+		r.log.Info("Attack thành công", zap.String("stateAfter", string(cSession.State)))
 		r.renderCombatScreen(s, i, menuSession, cSession)
 
 	case menu.ActionPvESkill:
@@ -120,6 +140,13 @@ func (r *Router) HandlePvEInteraction(s *discordgo.Session, i *discordgo.Interac
 			ui.EditEphemeralEmbed(s, i, ui.WarningEmbed(formatCombatError(err)))
 			return
 		}
+
+		r.log.Info("Nhận thưởng thành công",
+			zap.String("userId", userID),
+			zap.String("sessionID", combatSessionID),
+			zap.Int("itemCount", len(claimed)),
+			zap.Bool("rewardClaimed", true),
+		)
 
 		// Render màn hình thưởng
 		desc := "Đạo hữu nhận được:\n"
@@ -180,7 +207,17 @@ func (r *Router) renderCombatScreen(s *discordgo.Session, i *discordgo.Interacti
 	vm := CombatSessionToViewModel(cSession, areaName)
 	embed := BuildCombatEmbed(vm)
 	comps := BuildCombatActionComponents(menuSession.SessionID, vm)
-	_, _ = s.InteractionResponseEdit(i, &discordgo.WebhookEdit{Embeds: &[]*discordgo.MessageEmbed{embed}, Components: &comps})
+
+	r.log.Debug("Edit UI Combat",
+		zap.String("embedType", "combat_active"),
+		zap.Int("componentCount", len(comps)),
+		zap.String("currentActorID", cSession.CurrentActorID),
+	)
+
+	_, err := s.InteractionResponseEdit(i, &discordgo.WebhookEdit{Embeds: &[]*discordgo.MessageEmbed{embed}, Components: &comps})
+	if err != nil {
+		r.log.Error("Edit UI Combat thất bại (có thể custom_id quá dài)", zap.Error(err), zap.String("userId", cSession.UserID), zap.String("combatSessionID", cSession.ID))
+	}
 }
 
 // PageLoader tĩnh cho màn Main PvE

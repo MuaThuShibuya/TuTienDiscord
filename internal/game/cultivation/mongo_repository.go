@@ -33,7 +33,11 @@ func NewMongoRepository(db *mongo.Database) Repository {
 
 func (r *mongoCultivationRepo) FindByUserID(ctx context.Context, userID, guildID string) (*CultivationProfile, error) {
 	var profile CultivationProfile
-	err := r.col.FindOne(ctx, bson.M{"userId": userID, "guildId": guildID}).Decode(&profile)
+	filter := bson.M{"userId": userID}
+	if guildID != "" {
+		filter["guildId"] = guildID
+	}
+	err := r.col.FindOne(ctx, filter).Decode(&profile)
 	if errors.Is(err, mongo.ErrNoDocuments) {
 		return nil, fmt.Errorf("%w: cultivation userId=%s", apperrors.ErrNotFound, userID)
 	}
