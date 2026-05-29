@@ -38,9 +38,6 @@ type Service interface {
 
 	// AddExperience cộng một lượng tu vi cho người chơi (dùng cho đan dược, nhiệm vụ).
 	AddExperience(ctx context.Context, userID, guildID string, amount int64) error
-
-	// AddStamina hồi phục thể lực cho người chơi (dùng cho đan dược).
-	AddStamina(ctx context.Context, userID, guildID string, amount int) error
 }
 
 type cultivationService struct {
@@ -60,47 +57,9 @@ func NewService(repo Repository, cdSvc cooldown.Service, ecoSvc economy.Service)
 	}
 }
 
-// calculateStaminaRegen tính toán số lượng thể lực hồi phục dựa trên thời gian thực
-func (s *cultivationService) calculateStaminaRegen(ctx context.Context, prof *CultivationProfile) error {
-	now := time.Now().UTC()
-	// Chặn lỗi nếu LastUpdate chưa set hoặc đồng hồ hệ thống trôi ngược (thời gian âm)
-	if prof.LastStaminaUpdateAt.IsZero() || now.Before(prof.LastStaminaUpdateAt) {
-		prof.LastStaminaUpdateAt = now
-		return s.repo.UpdateStats(ctx, prof)
-	}
-
-	if prof.Stamina >= prof.MaxStamina {
-		prof.LastStaminaUpdateAt = now // Reset mốc thời gian để tránh tích tụ rác
-		return s.repo.UpdateStats(ctx, prof)
-	}
-
-	minutesPassed := int(now.Sub(prof.LastStaminaUpdateAt).Minutes())
-	staminaRecovered := minutesPassed // 1 phút hồi 1 điểm thể lực
-
-	if staminaRecovered > 0 {
-		s.log.Debug("Tính toán hồi thể lực (Lazy Regen)",
-			zap.String("userId", prof.UserID),
-			zap.Int("minutesPassed", minutesPassed),
-			zap.Int("oldStamina", prof.Stamina),
-		)
-
-		prof.Stamina += staminaRecovered
-		if prof.Stamina > prof.MaxStamina {
-			prof.Stamina = prof.MaxStamina
-		}
-
-		// Cấn trừ thời gian đã dùng để quy đổi, giữ lại số dư phút
-		usedMinutes := staminaRecovered
-		prof.LastStaminaUpdateAt = prof.LastStaminaUpdateAt.Add(time.Duration(usedMinutes) * time.Minute)
-		return s.repo.UpdateStats(ctx, prof)
-	}
-	return nil
-}
-
 func (s *cultivationService) GetOrCreate(ctx context.Context, userID, guildID string) (*CultivationProfile, error) {
 	profile, err := s.repo.FindByUserID(ctx, userID, "") // LUÔN DÙNG KHO GLOBAL
 	if err == nil {
-		_ = s.calculateStaminaRegen(ctx, profile)
 		return profile, nil
 	}
 	if !apperrors.IsNotFound(err) {
@@ -125,9 +84,6 @@ func (s *cultivationService) GetOrCreate(ctx context.Context, userID, guildID st
 
 func (s *cultivationService) GetProfile(ctx context.Context, userID, guildID string) (*CultivationProfile, error) {
 	prof, err := s.repo.FindByUserID(ctx, userID, "") // LUÔN DÙNG KHO GLOBAL
-	if err == nil {
-		_ = s.calculateStaminaRegen(ctx, prof)
-	}
 	return prof, err
 }
 
@@ -170,18 +126,12 @@ func (s *cultivationService) Meditate(ctx context.Context, in CultivationActionI
 		return nil, err
 	}
 
-	cost := ApplyPathStaminaCostBonus(prof.Path, "meditate", 5)
-	if prof.Stamina < cost {
-		return nil, apperrors.ErrInsufficientStamina
-	}
-
 	expGained := int64(10 + prof.RealmLevel*5)
 	if prof.MindState >= 70 {
 		expGained = expGained * 110 / 100
 	}
 	expGained = ApplyPathExpBonus(prof.Path, "meditate", expGained)
 
-	prof.Stamina -= cost
 	prof.CultivationExp += expGained
 	prof.MindState = clamp(prof.MindState+1, 0, 100)
 
@@ -191,9 +141,9 @@ func (s *cultivationService) Meditate(ctx context.Context, in CultivationActionI
 	_ = s.cooldownSvc.SetCooldown(ctx, in.UserID, in.GuildID, cooldown.ActionMeditate, 5*time.Minute)
 
 	return &CultivationActionResult{
-		Action: "Tĩnh Tu", ExpGained: expGained, StaminaSpent: cost,
+		Action: "Tĩnh Tu", ExpGained: expGained,
 		NewCultivationExp: prof.CultivationExp, CultivationRequired: prof.CultivationExpRequired,
-		NewStamina: prof.Stamina, NewMindState: prof.MindState,
+		NewMindState:      prof.MindState,
 		CooldownExpiresAt: in.Now.Add(5 * time.Minute),
 		Message:           fmt.Sprintf("Tĩnh tu thành công, nhận %d tu vi.", expGained),
 	}, nil
@@ -209,18 +159,12 @@ func (s *cultivationService) Seclusion(ctx context.Context, in CultivationAction
 		return nil, err
 	}
 
-	cost := ApplyPathStaminaCostBonus(prof.Path, "seclusion", 20)
-	if prof.Stamina < cost {
-		return nil, apperrors.ErrInsufficientStamina
-	}
-
 	expGained := int64(50 + prof.RealmLevel*15)
 	if prof.MindState >= 70 {
 		expGained = expGained * 115 / 100
 	}
 	expGained = ApplyPathExpBonus(prof.Path, "seclusion", expGained)
 
-	prof.Stamina -= cost
 	prof.CultivationExp += expGained
 	prof.MindState = clamp(prof.MindState+2, 0, 100)
 
@@ -230,9 +174,9 @@ func (s *cultivationService) Seclusion(ctx context.Context, in CultivationAction
 	_ = s.cooldownSvc.SetCooldown(ctx, in.UserID, in.GuildID, cooldown.ActionSeclusion, 60*time.Minute)
 
 	return &CultivationActionResult{
-		Action: "Bế Quan", ExpGained: expGained, StaminaSpent: cost,
+		Action: "Bế Quan", ExpGained: expGained,
 		NewCultivationExp: prof.CultivationExp, CultivationRequired: prof.CultivationExpRequired,
-		NewStamina: prof.Stamina, NewMindState: prof.MindState,
+		NewMindState:      prof.MindState,
 		CooldownExpiresAt: in.Now.Add(60 * time.Minute),
 		Message:           fmt.Sprintf("Bế quan thành công, nhận %d tu vi.", expGained),
 	}, nil
@@ -248,16 +192,10 @@ func (s *cultivationService) BodyTraining(ctx context.Context, in CultivationAct
 		return nil, err
 	}
 
-	cost := ApplyPathStaminaCostBonus(prof.Path, "body_training", 10)
-	if prof.Stamina < cost {
-		return nil, apperrors.ErrInsufficientStamina
-	}
-
 	expGained := int64(5 + prof.RealmLevel*3)
 	cpGained := int64(3 + prof.RealmLevel*2)
 	cpGained = ApplyPathCombatPowerBonus(prof.Path, "body_training", cpGained)
 
-	prof.Stamina -= cost
 	prof.CultivationExp += expGained
 	prof.CombatPower += cpGained
 
@@ -267,9 +205,9 @@ func (s *cultivationService) BodyTraining(ctx context.Context, in CultivationAct
 	_ = s.cooldownSvc.SetCooldown(ctx, in.UserID, in.GuildID, cooldown.ActionBodyTraining, 15*time.Minute)
 
 	return &CultivationActionResult{
-		Action: "Luyện Thể", ExpGained: expGained, CombatPowerGained: cpGained, StaminaSpent: cost,
+		Action: "Luyện Thể", ExpGained: expGained, CombatPowerGained: cpGained,
 		NewCultivationExp: prof.CultivationExp, CultivationRequired: prof.CultivationExpRequired,
-		NewCombatPower: prof.CombatPower, NewStamina: prof.Stamina, NewMindState: prof.MindState,
+		NewCombatPower: prof.CombatPower, NewMindState: prof.MindState,
 		CooldownExpiresAt: in.Now.Add(15 * time.Minute),
 		Message:           fmt.Sprintf("Luyện thể thành công, nhận %d tu vi và %d chiến lực.", expGained, cpGained),
 	}, nil
@@ -387,22 +325,5 @@ func (s *cultivationService) AddExperience(ctx context.Context, userID, guildID 
 	}
 
 	prof.CultivationExp += amount
-	return s.repo.UpdateStats(ctx, prof)
-}
-
-func (s *cultivationService) AddStamina(ctx context.Context, userID, guildID string, amount int) error {
-	if amount <= 0 {
-		return nil
-	}
-
-	prof, err := s.GetProfile(ctx, userID, guildID)
-	if err != nil {
-		return err
-	}
-
-	prof.Stamina += amount
-	if prof.Stamina > prof.MaxStamina {
-		prof.Stamina = prof.MaxStamina
-	}
 	return s.repo.UpdateStats(ctx, prof)
 }

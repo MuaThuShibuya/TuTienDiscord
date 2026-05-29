@@ -42,13 +42,16 @@ type CultivationProfile struct {
 	CultivationExp         int64              `bson:"cultivationExp"         json:"cultivationExp"`
 	CultivationExpRequired int64              `bson:"cultivationExpRequired" json:"cultivationExpRequired"`
 	CombatPower            int64              `bson:"combatPower"            json:"combatPower"`
-	Stamina                int                `bson:"stamina"                json:"stamina"` // Thể lực hiện tại
-	MaxStamina             int                `bson:"maxStamina"             json:"maxStamina"`
-	LastStaminaUpdateAt    time.Time          `bson:"lastStaminaUpdateAt"    json:"lastStaminaUpdateAt"` // Thời điểm cập nhật thể lực cuối
-	MindState              int                `bson:"mindState"              json:"mindState"`           // 0 - 100
-	Path                   CultivationPath    `bson:"path"                   json:"path"`
-	CreatedAt              time.Time          `bson:"createdAt"              json:"createdAt"`
-	UpdatedAt              time.Time          `bson:"updatedAt"              json:"updatedAt"`
+	// Deprecated: stamina system removed. Kept for backward compatibility.
+	Stamina int `bson:"stamina,omitempty"      json:"-"`
+	// Deprecated: stamina system removed.
+	MaxStamina int `bson:"maxStamina,omitempty"   json:"-"`
+	// Deprecated: stamina system removed.
+	LastStaminaUpdateAt time.Time       `bson:"lastStaminaUpdateAt,omitempty" json:"-"`
+	MindState           int             `bson:"mindState"              json:"mindState"` // 0 - 100
+	Path                CultivationPath `bson:"path"                   json:"path"`
+	CreatedAt           time.Time       `bson:"createdAt"              json:"createdAt"`
+	UpdatedAt           time.Time       `bson:"updatedAt"              json:"updatedAt"`
 }
 
 // RealmDisplayName trả về tên tiếng Việt của cảnh giới.
@@ -127,11 +130,9 @@ type CultivationActionResult struct {
 	Action              string
 	ExpGained           int64
 	CombatPowerGained   int64
-	StaminaSpent        int
 	NewCultivationExp   int64
 	CultivationRequired int64
 	NewCombatPower      int64
-	NewStamina          int
 	NewMindState        int
 	CooldownExpiresAt   time.Time
 	Message             string

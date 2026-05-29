@@ -7,7 +7,12 @@ import (
 	"github.com/whiskey/tu-tien-bot/internal/apperrors"
 	"github.com/whiskey/tu-tien-bot/internal/game/inventory"
 	"github.com/whiskey/tu-tien-bot/internal/game/item"
+	"github.com/whiskey/tu-tien-bot/internal/logger"
 )
+
+func init() {
+	_ = logger.Init(logger.Options{Level: "error", Format: "json"})
+}
 
 type mockInvRepo struct{}
 

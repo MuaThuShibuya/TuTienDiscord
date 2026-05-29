@@ -16,7 +16,6 @@ type AreaViewModel struct {
 	Description string
 	NextStage   int
 	RecommendCP string
-	StaminaCost int64
 }
 
 type CombatViewModel struct {

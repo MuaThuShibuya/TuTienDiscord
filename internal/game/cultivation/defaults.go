@@ -14,8 +14,6 @@ const (
 	DefaultCultivationExp = int64(0)
 	DefaultExpRequired    = int64(200) // Khớp với CalculateNextExpRequired
 	DefaultCombatPower    = int64(100)
-	DefaultStamina        = 100
-	DefaultMaxStamina     = 100
 	DefaultMindState      = 50 // Khởi đầu v0.2: Tâm cảnh Bình tĩnh (50/100)
 	DefaultPath           = PathNone
 )
@@ -31,8 +29,6 @@ func NewCultivationProfile(userID, guildID string) *CultivationProfile {
 		CultivationExp:         DefaultCultivationExp,
 		CultivationExpRequired: DefaultExpRequired,
 		CombatPower:            DefaultCombatPower,
-		Stamina:                DefaultStamina,
-		MaxStamina:             DefaultMaxStamina,
 		MindState:              DefaultMindState,
 		Path:                   DefaultPath,
 	}

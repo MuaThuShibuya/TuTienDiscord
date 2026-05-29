@@ -25,7 +25,6 @@ var (
 	ErrCooldownActive             = errors.New("cooldown active")    // Đang trong thời gian hồi chiêu
 	ErrInsufficientFunds          = errors.New("insufficient funds") // Không đủ tài nguyên
 	ErrDatabaseTimeout            = errors.New("database timeout")   // Thao tác DB bị timeout
-	ErrInsufficientStamina        = errors.New("insufficient stamina")
 	ErrInsufficientCultivationExp = errors.New("insufficient cultivation exp")
 	ErrInsufficientMindState      = errors.New("insufficient mind state")
 	ErrMaxRealmReached            = errors.New("max realm reached")
@@ -74,7 +73,6 @@ func IsSessionNotOwner(err error) bool          { return errors.Is(err, ErrSessi
 func IsCooldownActive(err error) bool           { return errors.Is(err, ErrCooldownActive) }
 func IsInvalidInput(err error) bool             { return errors.Is(err, ErrInvalidInput) }
 func IsInsufficientFunds(err error) bool        { return errors.Is(err, ErrInsufficientFunds) }
-func IsInsufficientStamina(err error) bool      { return errors.Is(err, ErrInsufficientStamina) }
 func IsPathAlreadyChosen(err error) bool        { return errors.Is(err, ErrPathAlreadyChosen) }
 func IsInventoryFull(err error) bool            { return errors.Is(err, ErrInventoryFull) }
 func IsItemNotFound(err error) bool             { return errors.Is(err, ErrItemNotFound) }

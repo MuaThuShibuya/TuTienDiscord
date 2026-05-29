@@ -235,7 +235,6 @@ func (r *Router) renderAreaSelect(s *discordgo.Session, i *discordgo.Interaction
 			vm.Areas = append(vm.Areas, AreaViewModel{
 				ID: def.ID, Name: def.Name, NextStage: nextStage,
 				RecommendCP: fmt.Sprintf("%d", 100*nextStage), // Nháp config CP
-				StaminaCost: def.EntryCost.Stamina,
 			})
 		}
 	}
@@ -273,8 +272,8 @@ func PvEMainLoader(ctx context.Context, session *menu.Session) (*discordgo.Inter
 		Description: "Lựa chọn con đường chinh phạt tiếp theo của đạo hữu.",
 		Color:       ui.ColorCombat,
 		Fields: []*discordgo.MessageEmbedField{
-			{Name: "Du Ngoạn", Value: "Tiêu hao Thể lực. Rớt kinh nghiệm, linh thạch, tài nguyên cường hóa cơ bản.", Inline: true},
-			{Name: "Bí Cảnh", Value: "Tiêu hao Thể lực lớn. Rớt trang bị, pháp bảo, kỳ trân dị thảo.", Inline: true},
+			{Name: "Du Ngoạn", Value: "Rớt kinh nghiệm, linh thạch, tài nguyên cường hóa cơ bản.", Inline: true},
+			{Name: "Bí Cảnh", Value: "Rớt trang bị, pháp bảo, kỳ trân dị thảo.", Inline: true},
 		},
 		Timestamp: time.Now().UTC().Format(time.RFC3339),
 	}

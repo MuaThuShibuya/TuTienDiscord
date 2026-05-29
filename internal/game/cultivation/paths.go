@@ -33,23 +33,6 @@ func ApplyPathExpBonus(path CultivationPath, action string, baseExp int64) int64
 	return baseExp + extra
 }
 
-// ApplyPathStaminaCostBonus giảm tiêu hao thể lực theo Đạo lộ (tối thiểu 1).
-func ApplyPathStaminaCostBonus(path CultivationPath, action string, baseCost int) int {
-	cost := baseCost
-	if path == PathBody {
-		if action == "meditate" {
-			cost -= 1
-		}
-		if action == "body_training" {
-			cost -= 2
-		}
-	}
-	if cost < 1 {
-		return 1
-	}
-	return cost
-}
-
 // ApplyPathCombatPowerBonus tăng chiến lực khi Luyện thể.
 func ApplyPathCombatPowerBonus(path CultivationPath, action string, baseCP int64) int64 {
 	bonus := float64(0)

@@ -6,9 +6,12 @@ import (
 	"github.com/whiskey/tu-tien-bot/internal/discord/menu"
 	"github.com/whiskey/tu-tien-bot/internal/game/item"
 	"github.com/whiskey/tu-tien-bot/internal/game/profile"
+	"github.com/whiskey/tu-tien-bot/internal/logger"
 )
 
 func init() {
+	_ = logger.Init(logger.Options{Level: "error", Format: "json"})
+
 	item.RegisterItems(map[string]item.ItemDefinition{
 		"usable_pill": {ID: "usable_pill", Name: "Pill", Usable: true, Type: item.TypePill},
 		"equip_sword": {ID: "equip_sword", Name: "Sword", Usable: false, Type: item.TypeEquipment},

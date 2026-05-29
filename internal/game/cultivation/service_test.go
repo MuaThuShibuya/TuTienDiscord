@@ -13,6 +13,7 @@ import (
 	"time"
 
 	apperrors "github.com/whiskey/tu-tien-bot/internal/apperrors"
+	"github.com/whiskey/tu-tien-bot/internal/game/cooldown"
 	"github.com/whiskey/tu-tien-bot/internal/game/cultivation"
 	"github.com/whiskey/tu-tien-bot/internal/logger"
 )
@@ -66,11 +67,24 @@ func (r *memCultivationRepo) UpdateStats(_ context.Context, profile *cultivation
 	existing.CultivationExp = profile.CultivationExp
 	existing.CultivationExpRequired = profile.CultivationExpRequired
 	existing.CombatPower = profile.CombatPower
-	existing.Stamina = profile.Stamina
 	existing.MindState = profile.MindState
 	existing.Path = profile.Path
 	existing.UpdatedAt = profile.UpdatedAt
 
+	return nil
+}
+
+// --- Mocks ---
+
+type mockCooldownSvc struct{}
+
+func (m *mockCooldownSvc) IsOnCooldown(ctx context.Context, userID, guildID string, act cooldown.Action) (bool, time.Duration) {
+	return false, 0
+}
+func (m *mockCooldownSvc) SetCooldown(ctx context.Context, userID, guildID string, act cooldown.Action, duration time.Duration) error {
+	return nil
+}
+func (m *mockCooldownSvc) ClearCooldown(ctx context.Context, userID, guildID string, act cooldown.Action) error {
 	return nil
 }
 
@@ -155,10 +169,6 @@ func TestDefaultValues(t *testing.T) {
 	if p.MindState != 50 {
 		t.Errorf("MindState khởi đầu sai: muốn 50, có %d", p.MindState)
 	}
-	// Thể lực phải > 0
-	if p.MaxStamina <= 0 {
-		t.Error("MaxStamina phải lớn hơn 0")
-	}
 	// Exp cần đột phá phải > 0
 	if p.CultivationExpRequired <= 0 {
 		t.Error("CultivationExpRequired phải lớn hơn 0")
@@ -193,4 +203,43 @@ func TestChoosePath(t *testing.T) {
 	if err == nil || err.Error() != apperrors.ErrPathAlreadyChosen.Error() {
 		t.Errorf("Phải trả về ErrPathAlreadyChosen, có: %v", err)
 	}
+}
+
+func TestCultivationActions_NoStaminaNeeded(t *testing.T) {
+	svc := cultivation.NewService(newMemCultivationRepo(), &mockCooldownSvc{}, nil)
+	ctx := context.Background()
+	in := cultivation.CultivationActionInput{
+		UserID:  "stamina_user",
+		GuildID: "guild1",
+		Now:     time.Now().UTC(),
+	}
+
+	// GetOrCreate sẽ tạo profile có Stamina=0 vì đã bỏ DefaultStamina
+	_, _ = svc.GetOrCreate(ctx, in.UserID, in.GuildID)
+
+	// 1. Tĩnh tu
+	if _, err := svc.Meditate(ctx, in); err != nil {
+		t.Errorf("Meditate lỗi khi stamina=0: %v", err)
+	}
+
+	// 2. Bế quan
+	if _, err := svc.Seclusion(ctx, in); err != nil {
+		t.Errorf("Seclusion lỗi khi stamina=0: %v", err)
+	}
+
+	// 3. Luyện thể
+	if _, err := svc.BodyTraining(ctx, in); err != nil {
+		t.Errorf("BodyTraining lỗi khi stamina=0: %v", err)
+	}
+}
+
+func TestGetProfile_ReadOnly(t *testing.T) {
+	svc := cultivation.NewService(newMemCultivationRepo(), nil, nil)
+	ctx := context.Background()
+	_, _ = svc.GetOrCreate(ctx, "user5", "guild1")
+	_, err := svc.GetProfile(ctx, "user5", "guild1")
+	if err != nil {
+		t.Errorf("GetProfile lỗi: %v", err)
+	}
+	// Vì hàm GetProfile ở file gốc không gọi UpdateStats (đã xóa), test ngầm kiểm chứng không có runtime error.
 }

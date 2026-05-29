@@ -19,7 +19,6 @@ const (
 // Tips shown in the main menu (rotate through these)
 var DailyTips = []string{
 	"Tĩnh tu mỗi ngày để tích lũy tu vi. Đừng bỏ lỡ buổi tu luyện nào!",
-	"Thể lực hồi phục theo thời gian. Hãy nghỉ ngơi để chiến đấu hiệu quả hơn.",
 	"Boss server xuất hiện theo giờ. Tham gia cùng đạo hữu để nhận thưởng!",
 	"Đan dược có thể tăng tốc tu luyện. Hãy khám phá cửa hàng đan dược!",
 	"Tông môn cung cấp nhiều buff đặc biệt. Hãy gia nhập tông môn sớm!",

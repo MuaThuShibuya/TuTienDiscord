@@ -346,10 +346,6 @@ func toMainMenuVM(session *menu.Session, player *profile.Player, cult *cultivati
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	tip := ui.DailyTips[r.Intn(len(ui.DailyTips))]
 
-	staminaBar := fmt.Sprintf("`%s` %d/%d",
-		utils.ProgressBar(cult.Stamina, cult.MaxStamina, 10),
-		cult.Stamina, cult.MaxStamina)
-
 	expBar := fmt.Sprintf("`%s` %s/%s",
 		utils.ProgressBar(int(cult.CultivationExp), int(cult.CultivationExpRequired), 10),
 		utils.FormatNumber(cult.CultivationExp),
@@ -362,7 +358,6 @@ func toMainMenuVM(session *menu.Session, player *profile.Player, cult *cultivati
 		CombatPower:  utils.FormatNumber(cult.CombatPower),
 		MindState:    fmt.Sprintf("%s (%d/100)", cult.MindStateDisplayName(), cult.MindState),
 		PathDisplay:  cult.Path.DisplayName(),
-		StaminaBar:   staminaBar,
 		ExpBar:       expBar,
 		SpiritStones: utils.FormatNumber(wallet.SpiritStones),
 		SpiritJades:  utils.FormatNumber(wallet.SpiritJades),
@@ -385,10 +380,6 @@ func toProfileMenuVM(session *menu.Session, player *profile.Player, wallet *econ
 }
 
 func toCultivationMenuVM(session *menu.Session, player *profile.Player, cult *cultivation.CultivationProfile) *menu.CultivationMenuVM {
-	staminaBar := fmt.Sprintf("`%s` %d/%d",
-		utils.ProgressBar(cult.Stamina, cult.MaxStamina, 10),
-		cult.Stamina, cult.MaxStamina)
-
 	expBar := fmt.Sprintf("`%s`\n%s / %s tu vi",
 		utils.ProgressBar(int(cult.CultivationExp), int(cult.CultivationExpRequired), 12),
 		utils.FormatNumber(cult.CultivationExp),
@@ -401,7 +392,6 @@ func toCultivationMenuVM(session *menu.Session, player *profile.Player, cult *cu
 		MindState:       fmt.Sprintf("%s (%d/100)", cult.MindStateDisplayName(), cult.MindState),
 		PathDisplay:     cult.Path.DisplayName(),
 		HasPath:         cult.Path != cultivation.PathNone,
-		StaminaBar:      staminaBar,
 		ExpBar:          expBar,
 		CombatPower:     utils.FormatNumber(cult.CombatPower),
 		CanBreakthrough: cult.CanBreakthrough(),

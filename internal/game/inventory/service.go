@@ -175,7 +175,6 @@ func (s *inventoryService) GrantStarterItems(ctx context.Context, userID, guildI
 	}
 
 	grant("pill_exp_tu_khi_d", 3)
-	grant("pill_stm_hoi_luc_d", 2)
 	grant("eq_weapon_moc_kiem_d", 1)
 	grant("eq_armor_vai_tho_d", 1)
 	grant("mat_enhance_hac_thiet_d", 3)
@@ -201,6 +200,15 @@ func (s *inventoryService) UseItem(ctx context.Context, userID, guildID, instanc
 		return "", apperrors.ErrItemNotUsable
 	}
 
+	// 0. Chặn đan thể lực cũ: nếu item CHỈ CÓ effect stamina thì không cho xài, không trừ đồ
+	if def.Effects != nil {
+		if s, ok := def.Effects["stamina"]; ok && s > 0 {
+			if def.Effects["exp"] == 0 && def.Effects["breakthrough_chance"] == 0 {
+				return "Cơ chế Thể Lực đã được gỡ bỏ. Vật phẩm này hiện không còn tác dụng và sẽ không bị tiêu hao.", nil
+			}
+		}
+	}
+
 	// 1. Trừ số lượng vật phẩm (Atomic)
 	if err := s.itemRepo.AdjustQuantity(ctx, instanceID, userID, guildID, -1); err != nil {
 		return "", err
@@ -208,17 +216,15 @@ func (s *inventoryService) UseItem(ctx context.Context, userID, guildID, instanc
 
 	// 2. Áp dụng hiệu ứng
 	expGained := int64(0)
-	staminaGained := 0
 	breakthroughBuff := 0
 
 	if def.Effects != nil {
 		expGained = int64(def.Effects["exp"])
-		staminaGained = def.Effects["stamina"]
 		breakthroughBuff = def.Effects["breakthrough_chance"]
 	}
 
 	// Fallback an toàn nếu Effects chưa được định nghĩa đầy đủ trong Registry
-	if expGained == 0 && staminaGained == 0 && breakthroughBuff == 0 {
+	if expGained == 0 && breakthroughBuff == 0 {
 		logger.L().Error("Vật phẩm thiếu cấu hình effect", zap.String("defID", inst.DefinitionID))
 		return "", fmt.Errorf("vật phẩm **%s** bị lỗi cấu hình hệ thống, vui lòng báo Admin", def.Name)
 	}
@@ -233,16 +239,6 @@ func (s *inventoryService) UseItem(ctx context.Context, userID, guildID, instanc
 			return "", fmt.Errorf("không thể hấp thụ linh khí lúc này: %w", err)
 		}
 		messages = append(messages, fmt.Sprintf("nhận **%d** tu vi", expGained))
-	}
-	if staminaGained > 0 {
-		if err := s.cultSvc.AddStamina(ctx, userID, guildID, staminaGained); err != nil {
-			// Hoàn trả lại vật phẩm nếu hiệu ứng thất bại
-			if rbErr := s.itemRepo.AdjustQuantity(ctx, instanceID, userID, guildID, 1); rbErr != nil {
-				logger.L().Error("CRITICAL: Mất vật phẩm do rollback thất bại", zap.String("instanceId", instanceID), zap.Error(rbErr))
-			}
-			return "", fmt.Errorf("không thể hồi phục thể lực lúc này: %w", err)
-		}
-		messages = append(messages, fmt.Sprintf("hồi **%d** thể lực", staminaGained))
 	}
 	if breakthroughBuff > 0 {
 		// Hiện tại CultivationProfile chưa có field lưu Buff đột phá. Tạm thời báo text lên UI.

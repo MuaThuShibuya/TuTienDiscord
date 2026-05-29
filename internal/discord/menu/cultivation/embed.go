@@ -36,7 +36,6 @@ func buildEmbed(vm *menu.CultivationMenuVM) *discordgo.MessageEmbed {
 			{Name: emoji.Realm.String() + " Cảnh Giới", Value: vm.RealmDisplay, Inline: true},
 			{Name: emoji.MindState.String() + " Tâm Cảnh", Value: vm.MindState, Inline: true},
 			{Name: emoji.Skill.String() + " Đạo Lộ", Value: vm.PathDisplay, Inline: true},
-			{Name: emoji.Stamina.String() + " Thể Lực", Value: vm.StaminaBar, Inline: false},
 			{Name: emoji.Cultivate.String() + " Tiến Độ Tu Vi", Value: vm.ExpBar, Inline: false},
 			{Name: emoji.CombatPower.String() + " Chiến Lực", Value: vm.CombatPower, Inline: true},
 		},

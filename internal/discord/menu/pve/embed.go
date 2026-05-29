@@ -28,8 +28,8 @@ func BuildAreaSelectEmbed(vm PvEMenuViewModel, isBiCanh bool) *discordgo.Message
 	}
 
 	for _, area := range vm.Areas {
-		val := fmt.Sprintf("Tiến trình: **Ải %d**\nĐề xuất: %s **%s**\nTiêu hao: %s **%d**",
-			area.NextStage, emoji.CombatPower.String(), area.RecommendCP, emoji.Stamina.String(), area.StaminaCost)
+		val := fmt.Sprintf("Tiến trình: **Ải %d**\nĐề xuất: %s **%s**",
+			area.NextStage, emoji.CombatPower.String(), area.RecommendCP)
 		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
 			Name:   area.Name,
 			Value:  val,

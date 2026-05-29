@@ -14,7 +14,6 @@ type MainMenuVM struct {
 	CombatPower  string // "1.234"
 	MindState    string // "Bình Tĩnh (50/100)"
 	PathDisplay  string // "Kiếm Tu"
-	StaminaBar   string // "`████░░` 80/100"
 	ExpBar       string // "`███░░░` 500/1.000"
 
 	SpiritStones string // "1.234"
@@ -45,7 +44,6 @@ type CultivationMenuVM struct {
 	MindState       string
 	PathDisplay     string
 	HasPath         bool
-	StaminaBar      string
 	ExpBar          string
 	CombatPower     string
 	CanBreakthrough bool

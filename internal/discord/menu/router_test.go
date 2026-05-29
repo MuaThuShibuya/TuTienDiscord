@@ -2,7 +2,13 @@ package menu
 
 import (
 	"testing"
+
+	"github.com/whiskey/tu-tien-bot/internal/logger"
 )
+
+func init() {
+	_ = logger.Init(logger.Options{Level: "error", Format: "json"})
+}
 
 func TestInventoryRouter_UpdatesDiscordUIAfterLoaderSuccess(t *testing.T) {
 	// Đây là unit test mock để xác minh router có bắt được update call hay không.

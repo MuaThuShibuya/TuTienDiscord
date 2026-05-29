@@ -33,7 +33,6 @@ func buildEmbed(vm *menu.MainMenuVM) *discordgo.MessageEmbed {
 		{Name: emoji.CombatPower.String() + " Chiến Lực", Value: vm.CombatPower, Inline: true},
 		{Name: emoji.MindState.String() + " Tâm Cảnh", Value: vm.MindState, Inline: true},
 		{Name: emoji.Skill.String() + " Đạo Lộ", Value: vm.PathDisplay, Inline: true},
-		{Name: emoji.Stamina.String() + " Thể Lực", Value: vm.StaminaBar, Inline: false},
 		{Name: emoji.Cultivate.String() + " Tu Vi", Value: vm.ExpBar, Inline: false},
 		{Name: emoji.SpiritStone.String() + " Linh Thạch", Value: vm.SpiritStones, Inline: true},
 		{Name: emoji.SpiritJade.String() + " Linh Ngọc", Value: vm.SpiritJades, Inline: true},

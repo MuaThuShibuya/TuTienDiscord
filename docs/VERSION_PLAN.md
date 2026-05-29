@@ -17,15 +17,15 @@
 - Error handling chuẩn
 
 ## v0.2 — Cultivation Core ✅ (đã xong)
-- Tĩnh tu (cooldown, exp gain, stamina cost)
-- Bế quan (nhân hệ số tu vi, lock stamina)
+- Tĩnh tu (cooldown, exp gain)
+- Bế quan (nhân hệ số tu vi)
 - Tu vi và tiến độ cảnh giới
 - Đột phá cảnh giới (chance-based, trừ linh thạch)
 - Tâm cảnh ảnh hưởng hiệu suất tu luyện
 - Chọn đạo lộ (kiếm tu, thể tu, linh tu, độc tu - select 1 lần)
 - Cooldown chi tiết cho từng hành động
 
-## v0.3 — Inventory & Equipment (hiện tại)
+## v0.3 — Inventory & Equipment (đã xong)
 - Túi đồ (giới hạn ô)
 - Item model (instance-based)
 - Đan dược cơ bản (tăng exp, hồi stamina, buff tỉ lệ đột phá)

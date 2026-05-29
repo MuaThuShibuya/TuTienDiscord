@@ -33,22 +33,6 @@ func TestApplyPathExpBonus(t *testing.T) {
 	}
 }
 
-func TestApplyPathStaminaCostBonus(t *testing.T) {
-	// Thể tu: tĩnh tu -1, luyện thể -2. Min 1.
-	if cultivation.ApplyPathStaminaCostBonus(cultivation.PathBody, "meditate", 5) != 4 {
-		t.Error("Lỗi giảm stamina tĩnh tu Thể Tu")
-	}
-	if cultivation.ApplyPathStaminaCostBonus(cultivation.PathBody, "body_training", 10) != 8 {
-		t.Error("Lỗi giảm stamina luyện thể Thể Tu")
-	}
-	if cultivation.ApplyPathStaminaCostBonus(cultivation.PathBody, "meditate", 1) != 1 {
-		t.Error("Lỗi Min clamp stamina")
-	}
-	if cultivation.ApplyPathStaminaCostBonus(cultivation.PathSword, "meditate", 5) != 5 {
-		t.Error("Kiếm tu không được giảm stamina")
-	}
-}
-
 func TestApplyPathCombatPowerBonus(t *testing.T) {
 	// Kiếm tu +10%, Thể tu +5% khi luyện thể
 	if cultivation.ApplyPathCombatPowerBonus(cultivation.PathSword, "body_training", 100) != 110 {

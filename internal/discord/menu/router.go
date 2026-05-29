@@ -420,8 +420,6 @@ func (r *Router) handleCultivationAction(s *discordgo.Session, i *discordgo.Inte
 		case errors.As(err, &cdErr):
 			r.sendEphemeral(s, i, ui.WarningEmbed(
 				fmt.Sprintf("Đạo hữu cần nghỉ ngơi. Vui lòng chờ **%s**.", cdErr.Remaining)))
-		case apperrors.IsInsufficientStamina(err):
-			r.sendEphemeral(s, i, ui.WarningEmbed("Thể lực không đủ! Hãy nghỉ ngơi để hồi phục."))
 		case apperrors.IsInsufficientFunds(err):
 			r.sendEphemeral(s, i, ui.WarningEmbed("Linh thạch không đủ để chuẩn bị trận pháp đột phá!"))
 		case errors.Is(err, apperrors.ErrInsufficientCultivationExp):
