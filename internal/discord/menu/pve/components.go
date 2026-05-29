@@ -68,7 +68,7 @@ func BuildCombatActionComponents(cache *ActionCache, menuSessionID string, vm Co
 		ui.ActionRow(
 			ui.Button("Tấn Công", attackID, ui.BtnPrimary, emoji.Sword, !vm.IsPlayerTurn),
 			ui.Button("Kỹ Năng", skillID, ui.BtnPrimary, emoji.Skill, !vm.IsPlayerTurn),
-			ui.Button("Tự Động", autoID, ui.BtnSuccess, emoji.Auto, !vm.IsPlayerTurn),
+			ui.Button("Auto x100", autoID, ui.BtnSuccess, emoji.Auto, !vm.IsPlayerTurn),
 			ui.Button("Bỏ Chạy", escapeID, ui.BtnDanger, emoji.Escape, false),
 		),
 	}

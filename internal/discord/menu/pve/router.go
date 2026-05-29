@@ -145,7 +145,7 @@ func (r *Router) HandlePvEInteraction(s *discordgo.Session, i *discordgo.Interac
 		}
 
 		opts := combat.AutoBattleOptions{
-			MaxActions:     5,
+			MaxActions:     100, // Đánh liên tục cho đến khi kết thúc trận (hoặc chạm mốc an toàn 100 hiệp)
 			IdempotencyKey: i.ID,
 			PreferSkill:    false,
 		}
@@ -158,12 +158,6 @@ func (r *Router) HandlePvEInteraction(s *discordgo.Session, i *discordgo.Interac
 
 		r.log.Info("AutoBattle hoàn tất", zap.Int("actionsTaken", res.ActionsTaken), zap.String("stoppedReason", res.StoppedReason))
 		r.renderCombatScreen(s, i, menuSession, res.Session)
-		if res.StoppedReason == "max_actions" {
-			_, _ = s.FollowupMessageCreate(i, true, &discordgo.WebhookParams{
-				Embeds: []*discordgo.MessageEmbed{ui.SuccessEmbed("Tự Động", "Thần thức tự chiến đã tạm dừng sau 5 nhịp, đạo hữu có thể tiếp tục.")},
-				Flags:  discordgo.MessageFlagsEphemeral,
-			})
-		}
 
 	case menu.ActionPvEEscape:
 		ui.EditEphemeralEmbed(s, i, ui.WarningEmbed("Độn thuật đang được nghiên cứu, hiện tại chỉ có tử chiến tới cùng!"))

@@ -224,4 +224,84 @@ func TestService_ExecuteAutoBattle(t *testing.T) {
 			t.Errorf("Quái chưa bị mất máu từ chuỗi tự đánh")
 		}
 	})
+
+	t.Run("Auto đánh đến khi quái chết (Chiến thắng)", func(t *testing.T) {
+		repo := newFakeCombatRepo()
+		svc, _ := NewService(repo, NewTurnOrderService(), rand.New(rand.NewSource(1)), zap.NewNop())
+
+		session := &CombatSession{
+			ID:             "ss_auto_win",
+			UserID:         "u1",
+			State:          StateActive,
+			Turn:           1,
+			Player:         CombatActor{ID: "u1", CurrentHP: 100, Stats: CombatStats{ATK: 500, Speed: 100}}, // ATK cao đánh 1 phát chết quái
+			Enemies:        []CombatActor{{ID: "e1", CurrentHP: 100, Stats: CombatStats{DEF: 0, Speed: 90}}},
+			CurrentActorID: "u1",
+			ExpiresAt:      time.Now().Add(time.Hour),
+			TurnOrder: []TurnOrderEntry{
+				{ActorID: "u1", ActionValue: 100, Speed: 100},
+				{ActorID: "e1", ActionValue: 110, Speed: 90},
+			},
+		}
+		repo.sessions[session.ID] = session
+
+		opts := AutoBattleOptions{
+			MaxActions:     100,
+			IdempotencyKey: "auto_btn_win",
+		}
+
+		res, err := svc.ExecuteAutoBattle(context.Background(), "u1", "ss_auto_win", opts)
+		if err != nil {
+			t.Fatalf("Không mong đợi lỗi: %v", err)
+		}
+		if res.Session.State != StateWon {
+			t.Errorf("Mong đợi trạng thái won, nhận %v", res.Session.State)
+		}
+		if res.StoppedReason != string(StateWon) {
+			t.Errorf("Mong đợi lý do dừng là won, nhận %s", res.StoppedReason)
+		}
+		if res.ActionsTaken != 1 {
+			t.Errorf("Mong đợi đánh đúng 1 nhịp là win, nhận %d", res.ActionsTaken)
+		}
+	})
+
+	t.Run("Auto đánh đến khi người chơi chết (Thất bại)", func(t *testing.T) {
+		repo := newFakeCombatRepo()
+		svc, _ := NewService(repo, NewTurnOrderService(), rand.New(rand.NewSource(1)), zap.NewNop())
+
+		session := &CombatSession{
+			ID:             "ss_auto_lose",
+			UserID:         "u1",
+			State:          StateActive,
+			Turn:           1,
+			Player:         CombatActor{ID: "u1", CurrentHP: 1, Stats: CombatStats{ATK: 10, Speed: 100}}, // HP người chơi cực thấp
+			Enemies:        []CombatActor{{ID: "e1", CurrentHP: 1000, Stats: CombatStats{ATK: 100, DEF: 0, Speed: 90}}}, // ATK quái cao
+			CurrentActorID: "u1",
+			ExpiresAt:      time.Now().Add(time.Hour),
+			TurnOrder: []TurnOrderEntry{
+				{ActorID: "u1", ActionValue: 100, Speed: 100},
+				{ActorID: "e1", ActionValue: 110, Speed: 90},
+			},
+		}
+		repo.sessions[session.ID] = session
+
+		opts := AutoBattleOptions{
+			MaxActions:     100,
+			IdempotencyKey: "auto_btn_lose",
+		}
+
+		res, err := svc.ExecuteAutoBattle(context.Background(), "u1", "ss_auto_lose", opts)
+		if err != nil {
+			t.Fatalf("Không mong đợi lỗi: %v", err)
+		}
+		if res.Session.State != StateLost {
+			t.Errorf("Mong đợi trạng thái lost, nhận %v", res.Session.State)
+		}
+		if res.StoppedReason != string(StateLost) {
+			t.Errorf("Mong đợi lý do dừng là lost, nhận %s", res.StoppedReason)
+		}
+		if res.ActionsTaken != 1 {
+			t.Errorf("Mong đợi đánh 1 nhịp rồi bị quái vả chết, nhận %d", res.ActionsTaken)
+		}
+	})
 }

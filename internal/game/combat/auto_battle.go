@@ -100,12 +100,6 @@ func (s *Service) ExecuteAutoBattle(ctx context.Context, userID, sessionID strin
 	stoppedReason := "max_actions"
 
 	for actionsTaken < opts.MaxActions {
-		// Cập nhật trạng thái session sau mỗi nhịp
-		session, err = s.repo.GetSession(ctx, sessionID)
-		if err != nil {
-			return nil, err
-		}
-
 		if !session.IsActive() {
 			stoppedReason = string(session.State)
 			break
@@ -136,9 +130,6 @@ func (s *Service) ExecuteAutoBattle(ctx context.Context, userID, sessionID strin
 		}
 		actionsTaken++
 	}
-
-	// Đọc lại trạng thái cuối cùng trước khi trả về cho UI
-	session, _ = s.repo.GetSession(ctx, sessionID)
 
 	return &AutoBattleResult{
 		Session:       session,
