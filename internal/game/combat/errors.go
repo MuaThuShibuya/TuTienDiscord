@@ -24,7 +24,8 @@ var (
 
 	// Reward Errors
 	ErrRewardSessionNotWon         = errors.New("trận chiến chưa giành chiến thắng, không thể nhận thưởng")
-	ErrRewardAlreadyClaimed        = errors.New("phần thưởng của trận này đã được nhận")
-	ErrRewardInvalidIdempotencyKey = errors.New("idempotency key không hợp lệ khi nhận thưởng")
+	ErrRewardAlreadyClaimed        = errors.New("phần thưởng này đã được nhận trước đó")
+	ErrRewardClaimInProgress       = errors.New("phần thưởng đang được xử lý, vui lòng chờ")
+	ErrRewardClaimFailedNeedsAdmin = errors.New("quá trình nhận thưởng gặp lỗi hệ thống và đã được khóa an toàn. Vui lòng báo Admin để kiểm tra, không bấm nhận lại nhiều lần")
 	ErrRewardGrantFailed           = errors.New("lỗi trao phần thưởng")
 )

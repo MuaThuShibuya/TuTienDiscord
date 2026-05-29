@@ -49,6 +49,9 @@ func (s *inventoryService) GetInventory(ctx context.Context, userID, guildID str
 }
 
 func (s *inventoryService) AddItem(ctx context.Context, userID, guildID, definitionID string, quantity int64) error {
+	if quantity <= 0 {
+		return apperrors.ErrInvalidInput
+	}
 	def, ok := item.GetDefinition(definitionID)
 	if !ok {
 		return apperrors.ErrInvalidInput

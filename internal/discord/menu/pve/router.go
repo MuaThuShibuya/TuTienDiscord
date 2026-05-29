@@ -46,6 +46,12 @@ func formatCombatError(err error) string {
 	if errors.Is(err, combat.ErrRewardAlreadyClaimed) {
 		return "Đạo hữu đã gom sạch thiên tài địa bảo nơi này rồi, không còn gì sót lại."
 	}
+	if errors.Is(err, combat.ErrRewardClaimInProgress) {
+		return "Phần thưởng đang được xử lý, vui lòng chờ."
+	}
+	if errors.Is(err, combat.ErrRewardClaimFailedNeedsAdmin) {
+		return "Quá trình nhận thưởng gặp lỗi hệ thống và đã được khóa an toàn. Vui lòng báo Admin để kiểm tra, không bấm nhận lại nhiều lần."
+	}
 	if errors.Is(err, combat.ErrRewardSessionNotWon) {
 		return "Yêu ma chưa dẹp yên, làm sao có thể tranh đoạt cơ duyên?"
 	}
@@ -54,6 +60,9 @@ func formatCombatError(err error) string {
 	}
 	if errors.Is(err, combat.ErrRewardGrantFailed) || strings.Contains(err.Error(), "vật phẩm không tồn tại") || strings.Contains(err.Error(), "tồn tại") {
 		return fmt.Sprintf("Thiên tài địa bảo nơi này chưa được Thiên Cơ Các ghi vào bảo lục. Hãy báo lại cho chưởng quản.\n*Debug: %v*", err)
+	}
+	if strings.Contains(err.Error(), "inventory full") || strings.Contains(err.Error(), "hết chỗ") {
+		return "Túi đồ của đạo hữu đã đầy. Hãy dọn túi trước khi nhận thưởng. Phần thưởng chưa được nhận và sẽ không bị mất."
 	}
 
 	// Lỗi Generic
@@ -162,9 +171,8 @@ func (r *Router) HandlePvEInteraction(s *discordgo.Session, i *discordgo.Interac
 
 	case menu.ActionPvEClaim:
 		combatSessionID := extra
-		idempotencyKey := i.ID
 
-		claimed, err := r.pvecombatSvc.ClaimReward(ctx, userID, combatSessionID, idempotencyKey)
+		claimed, err := r.pvecombatSvc.ClaimReward(ctx, userID, combatSessionID)
 		if err != nil {
 			ui.EditEphemeralEmbed(s, i, ui.WarningEmbed(formatCombatError(err)))
 			return

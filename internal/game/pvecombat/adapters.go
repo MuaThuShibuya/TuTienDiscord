@@ -9,9 +9,11 @@ import (
 	"errors"
 	"math/rand"
 
+	"github.com/whiskey/tu-tien-bot/internal/apperrors"
 	"github.com/whiskey/tu-tien-bot/internal/game/characterstats"
 	"github.com/whiskey/tu-tien-bot/internal/game/combat"
 	"github.com/whiskey/tu-tien-bot/internal/game/inventory"
+	"github.com/whiskey/tu-tien-bot/internal/game/item"
 	"github.com/whiskey/tu-tien-bot/internal/game/pve"
 	"github.com/whiskey/tu-tien-bot/internal/logger"
 	"go.uber.org/zap"
@@ -66,15 +68,54 @@ func NewGrantAdapter(invSvc inventory.Service) RewardGrantService {
 	return &GrantAdapter{invSvc: invSvc}
 }
 func (a *GrantAdapter) GrantExp(ctx context.Context, userID string, amount int64) error {
+	if amount <= 0 {
+		return errors.New("invalid reward amount")
+	}
 	return nil
 } // TODO: Nối với Cultivation sau
 func (a *GrantAdapter) GrantStones(ctx context.Context, userID string, amount int64) error {
+	if amount <= 0 {
+		return errors.New("invalid reward amount")
+	}
 	return nil
 } // TODO: Nối với Economy sau
 func (a *GrantAdapter) GrantItem(ctx context.Context, userID, defID string, quantity int64) error {
+	if quantity <= 0 {
+		return errors.New("invalid reward amount")
+	}
 	logger.L().Info("GrantAdapter: Trao vật phẩm",
 		zap.String("userId", userID),
 		zap.String("defId", defID),
 		zap.Int64("qty", quantity))
 	return a.invSvc.AddItem(ctx, userID, "", defID, quantity) // Truyền guildID rỗng để dùng kho global
+}
+
+func (a *GrantAdapter) PreflightInventoryCapacity(ctx context.Context, userID string, items []RewardItemPlan) error {
+	inv, currentItems, err := a.invSvc.GetInventory(ctx, userID, "")
+	if err != nil {
+		return err
+	}
+	requiredNewSlots := 0
+	stackableCount := make(map[string]int64)
+	for _, it := range currentItems {
+		stackableCount[it.DefinitionID] += it.Quantity
+	}
+	for _, req := range items {
+		def, ok := item.GetDefinition(req.ItemID)
+		if !ok {
+			return errors.New("vật phẩm không tồn tại")
+		}
+		if def.Stackable {
+			if _, exists := stackableCount[req.ItemID]; !exists {
+				requiredNewSlots++
+				stackableCount[req.ItemID] = int64(req.Quantity)
+			}
+		} else {
+			requiredNewSlots += req.Quantity
+		}
+	}
+	if inv.SlotUsage+requiredNewSlots > inv.SlotLimit {
+		return apperrors.ErrInventoryFull
+	}
+	return nil
 }

@@ -60,6 +60,39 @@ func (r *fakeRepo) MarkSessionState(ctx context.Context, sessionID string, state
 	return nil
 }
 
+func (r *fakeRepo) TryStartRewardClaim(ctx context.Context, sessionID string, claimID string, now time.Time) (*combat.CombatSession, error) {
+	s, ok := r.sessions[sessionID]
+	if !ok {
+		return nil, apperrors.ErrNotFound
+	}
+	if s.RewardClaimed || s.RewardClaimStatus == "claimed" {
+		return nil, combat.ErrRewardAlreadyClaimed
+	}
+	if s.RewardClaimStatus == "claiming" {
+		return nil, combat.ErrRewardClaimInProgress
+	}
+	if s.RewardClaimStatus == "claim_failed" {
+		return nil, combat.ErrRewardClaimFailedNeedsAdmin
+	}
+	s.RewardClaimStatus = "claiming"
+	s.RewardClaimID = claimID
+	s.UpdatedAt = now
+	return s, nil
+}
+func (r *fakeRepo) CompleteRewardClaim(ctx context.Context, sessionID string, claimID string, details []combat.ClaimedReward, now time.Time) error {
+	s, _ := r.sessions[sessionID]
+	s.RewardClaimed = true
+	s.RewardClaimStatus = "claimed"
+	s.ClaimedRewards = details
+	return nil
+}
+func (r *fakeRepo) FailRewardClaim(ctx context.Context, sessionID string, claimID string, reason string, now time.Time) error {
+	s, _ := r.sessions[sessionID]
+	s.RewardClaimStatus = "claim_failed"
+	s.RewardClaimError = reason
+	return nil
+}
+
 type fakeStatsProvider struct {
 	stats combat.CombatStats
 	err   error
@@ -104,7 +137,14 @@ type fakeRewardGrantService struct {
 	err error
 }
 
+func (f *fakeRewardGrantService) PreflightInventoryCapacity(ctx context.Context, userID string, items []RewardItemPlan) error {
+	return f.err
+}
+
 func (f *fakeRewardGrantService) GrantExp(ctx context.Context, userID string, amount int64) error {
+	if amount <= 0 {
+		return errors.New("invalid")
+	}
 	return f.err
 }
 

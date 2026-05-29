@@ -54,8 +54,11 @@ type CombatSession struct {
 	IdempotencyKeys        []string         `bson:"idempotencyKeys" json:"idempotencyKeys"` // Chống double-click
 	AutoBattle             AutoBattlePolicy `bson:"autoBattle" json:"autoBattle"`           // Chính sách đánh tự động
 	RewardClaimed          bool             `bson:"rewardClaimed" json:"rewardClaimed"`
+	RewardClaimStatus      string           `bson:"rewardClaimStatus,omitempty" json:"rewardClaimStatus,omitempty"`
+	RewardClaimID          string           `bson:"rewardClaimId,omitempty" json:"rewardClaimId,omitempty"`
+	RewardClaimError       string           `bson:"rewardClaimError,omitempty" json:"rewardClaimError,omitempty"`
+	RewardClaimStartedAt   time.Time        `bson:"rewardClaimStartedAt,omitempty" json:"rewardClaimStartedAt,omitempty"`
 	RewardClaimedAt        time.Time        `bson:"rewardClaimedAt" json:"rewardClaimedAt"`
-	RewardIdempotencyKey   string           `bson:"rewardIdempotencyKey" json:"rewardIdempotencyKey"`
 	ClaimedRewards         []ClaimedReward  `bson:"claimedRewards" json:"claimedRewards"`
 	CreatedAt              time.Time        `bson:"createdAt" json:"createdAt"`
 	UpdatedAt              time.Time        `bson:"updatedAt" json:"updatedAt"`

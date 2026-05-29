@@ -8,6 +8,7 @@ import (
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 
 	"github.com/whiskey/tu-tien-bot/internal/apperrors"
 )
@@ -77,4 +78,74 @@ func (r *mongoCombatRepo) MarkSessionState(ctx context.Context, sessionID string
 	update := bson.M{"$set": bson.M{"state": state, "updatedAt": time.Now().UTC()}}
 	_, err := r.col.UpdateOne(ctx, filter, update)
 	return err
+}
+
+func (r *mongoCombatRepo) TryStartRewardClaim(ctx context.Context, sessionID string, claimID string, now time.Time) (*CombatSession, error) {
+	filter := bson.M{
+		"_id":           sessionID,
+		"rewardClaimed": bson.M{"$ne": true},
+		"$or": []bson.M{
+			{"rewardClaimStatus": bson.M{"$exists": false}},
+			{"rewardClaimStatus": ""},
+			{"rewardClaimStatus": "pending"},
+		},
+	}
+	update := bson.M{
+		"$set": bson.M{
+			"rewardClaimStatus":    "claiming",
+			"rewardClaimId":        claimID,
+			"rewardClaimError":     "",
+			"rewardClaimStartedAt": now,
+			"updatedAt":            now,
+		},
+	}
+	var session CombatSession
+	err := r.col.FindOneAndUpdate(ctx, filter, update, options.FindOneAndUpdate().SetReturnDocument(options.After)).Decode(&session)
+	if errors.Is(err, mongo.ErrNoDocuments) {
+		var current CombatSession
+		if findErr := r.col.FindOne(ctx, bson.M{"_id": sessionID}).Decode(&current); findErr == nil {
+			if current.RewardClaimed || current.RewardClaimStatus == "claimed" {
+				return nil, ErrRewardAlreadyClaimed
+			}
+			if current.RewardClaimStatus == "claiming" {
+				return nil, ErrRewardClaimInProgress
+			}
+			if current.RewardClaimStatus == "claim_failed" {
+				return nil, ErrRewardClaimFailedNeedsAdmin
+			}
+		}
+		return nil, apperrors.ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &session, nil
+}
+
+func (r *mongoCombatRepo) CompleteRewardClaim(ctx context.Context, sessionID string, claimID string, details []ClaimedReward, now time.Time) error {
+	filter := bson.M{"_id": sessionID, "rewardClaimStatus": "claiming", "rewardClaimId": claimID}
+	update := bson.M{"$set": bson.M{
+		"rewardClaimed": true, "rewardClaimStatus": "claimed", "rewardClaimedAt": now, "claimedRewards": details, "updatedAt": now,
+	}}
+	res, err := r.col.UpdateOne(ctx, filter, update)
+	if err != nil {
+		return err
+	}
+	if res.MatchedCount == 0 {
+		return errors.New("session not found or invalid state for completion")
+	}
+	return nil
+}
+
+func (r *mongoCombatRepo) FailRewardClaim(ctx context.Context, sessionID string, claimID string, reason string, now time.Time) error {
+	filter := bson.M{"_id": sessionID, "rewardClaimStatus": "claiming", "rewardClaimId": claimID}
+	update := bson.M{"$set": bson.M{"rewardClaimStatus": "claim_failed", "rewardClaimError": reason, "updatedAt": now}}
+	res, err := r.col.UpdateOne(ctx, filter, update)
+	if err != nil {
+		return err
+	}
+	if res.MatchedCount == 0 {
+		return errors.New("session not found or invalid state for failure")
+	}
+	return nil
 }

@@ -35,6 +35,19 @@ type RewardGrantService interface {
 	GrantExp(ctx context.Context, userID string, amount int64) error
 	GrantStones(ctx context.Context, userID string, amount int64) error
 	GrantItem(ctx context.Context, userID, defID string, quantity int64) error
+	PreflightInventoryCapacity(ctx context.Context, userID string, items []RewardItemPlan) error
+}
+
+type RewardPlan struct {
+	Exp     int64
+	Stones  int64
+	Items   []RewardItemPlan
+	Summary []combat.ClaimedReward
+}
+
+type RewardItemPlan struct {
+	ItemID   string
+	Quantity int
 }
 
 type Service struct {
@@ -241,9 +254,67 @@ func (s *Service) StartPvECombat(ctx context.Context, userID, areaID string) (*c
 	return session, nil
 }
 
-// ClaimReward giải quyết việc trao phần thưởng khi trận chiến kết thúc (State = Won).
-func (s *Service) ClaimReward(ctx context.Context, userID, sessionID, idempotencyKey string) ([]combat.ClaimedReward, error) {
-	if userID == "" || sessionID == "" || idempotencyKey == "" {
+func (s *Service) buildRewardPlan(session *combat.CombatSession) (*RewardPlan, error) {
+	rollResult := pve.ResolveStageRewards(session.GuaranteedRewardPoolID, session.BonusRewardPoolID, s.rng)
+	plan := &RewardPlan{}
+
+	process := func(rewards []pve.ResolvedReward, isBonus bool) {
+		for _, r := range rewards {
+			if r.Quantity <= 0 {
+				continue
+			}
+			switch r.Type {
+			case "exp":
+				plan.Exp += r.Quantity
+			case "stones":
+				plan.Stones += r.Quantity
+			default:
+				plan.Items = append(plan.Items, RewardItemPlan{ItemID: r.RefID, Quantity: int(r.Quantity)})
+			}
+			plan.Summary = append(plan.Summary, combat.ClaimedReward{Type: r.Type, RefID: r.RefID, Quantity: r.Quantity, IsBonus: isBonus})
+		}
+	}
+	process(rollResult.Guaranteed, false)
+	process(rollResult.Bonus, true)
+	return plan, nil
+}
+
+func (s *Service) validateRewardPlan(plan *RewardPlan) error {
+	if plan.Exp < 0 || plan.Stones < 0 {
+		return errors.New("config error: reward quantity cannot be negative")
+	}
+	for _, item := range plan.Items {
+		if item.Quantity <= 0 {
+			return errors.New("config error: item quantity must be positive")
+		}
+		if item.ItemID == "" {
+			return errors.New("config error: itemID cannot be empty")
+		}
+	}
+	return nil
+}
+
+func (s *Service) grantRewardPlan(ctx context.Context, userID string, plan *RewardPlan) error {
+	if plan.Exp > 0 {
+		if err := s.grantService.GrantExp(ctx, userID, plan.Exp); err != nil {
+			return err
+		}
+	}
+	if plan.Stones > 0 {
+		if err := s.grantService.GrantStones(ctx, userID, plan.Stones); err != nil {
+			return err
+		}
+	}
+	for _, it := range plan.Items {
+		if err := s.grantService.GrantItem(ctx, userID, it.ItemID, int64(it.Quantity)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Service) ClaimReward(ctx context.Context, userID, sessionID string) ([]combat.ClaimedReward, error) {
+	if userID == "" || sessionID == "" {
 		return nil, errors.New("thiếu tham số bắt buộc")
 	}
 
@@ -263,73 +334,55 @@ func (s *Service) ClaimReward(ctx context.Context, userID, sessionID, idempotenc
 		return nil, combat.ErrRewardSessionNotWon
 	}
 
-	// 1. Idempotency Check: Nếu đã nhận rồi, trả về kết quả cũ
-	if session.RewardClaimed {
-		if session.RewardIdempotencyKey == idempotencyKey {
-			return session.ClaimedRewards, nil
-		}
+	if session.RewardClaimed || session.RewardClaimStatus == "claimed" {
 		return nil, combat.ErrRewardAlreadyClaimed
 	}
+	if session.RewardClaimStatus == "claiming" {
+		return nil, combat.ErrRewardClaimInProgress
+	}
+	if session.RewardClaimStatus == "claim_failed" {
+		return nil, combat.ErrRewardClaimFailedNeedsAdmin
+	}
 
-	// 2. Resolve (Đổ xúc xắc mảng thưởng)
-	rollResult := pve.ResolveStageRewards(session.GuaranteedRewardPoolID, session.BonusRewardPoolID, s.rng)
+	plan, err := s.buildRewardPlan(session)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.validateRewardPlan(plan); err != nil {
+		return nil, err
+	}
 
-	var claimed []combat.ClaimedReward
-
-	// Helper function để duyệt và grant
-	processRewards := func(rewards []pve.ResolvedReward, isBonus bool) error {
-		for _, r := range rewards {
-			switch r.Type {
-			case "exp":
-				if err := s.grantService.GrantExp(ctx, userID, r.Quantity); err != nil {
-					s.log.Error("Lỗi trao Exp", zap.String("userId", userID), zap.Error(err))
-					return err
-				}
-			case "stones":
-				if err := s.grantService.GrantStones(ctx, userID, r.Quantity); err != nil {
-					s.log.Error("Lỗi trao Linh Thạch", zap.String("userId", userID), zap.Error(err))
-					return err
-				}
-			default:
-				if err := s.grantService.GrantItem(ctx, userID, r.RefID, r.Quantity); err != nil {
-					s.log.Error("Lỗi trao Item", zap.String("userId", userID), zap.String("poolId", session.GuaranteedRewardPoolID), zap.String("refId", r.RefID), zap.Error(err))
-					return err
-				}
-			}
-			claimed = append(claimed, combat.ClaimedReward{
-				Type: r.Type, RefID: r.RefID, Quantity: r.Quantity, IsBonus: isBonus,
-			})
+	if len(plan.Items) > 0 {
+		if err := s.grantService.PreflightInventoryCapacity(ctx, userID, plan.Items); err != nil {
+			return nil, err
 		}
-		return nil
 	}
 
-	// 3. Thực thi Grant
-	if err := processRewards(rollResult.Guaranteed, false); err != nil {
-		return nil, fmt.Errorf("%w: %v", combat.ErrRewardGrantFailed, err)
+	claimID := "pve:claim:" + sessionID
+	now := s.now().UTC()
+	lockedSession, err := s.repo.TryStartRewardClaim(ctx, sessionID, claimID, now)
+	if err != nil {
+		return nil, err
 	}
-	if err := processRewards(rollResult.Bonus, true); err != nil {
-		return nil, fmt.Errorf("%w: %v", combat.ErrRewardGrantFailed, err)
+
+	if err := s.grantRewardPlan(ctx, userID, plan); err != nil {
+		_ = s.repo.FailRewardClaim(ctx, sessionID, claimID, err.Error(), time.Now().UTC())
+		return nil, err
 	}
 
 	// 4. Update Progression
-	_ = s.pveProvider.MarkStageCleared(ctx, userID, session.AreaID, session.Stage)
+	_ = s.pveProvider.MarkStageCleared(ctx, userID, lockedSession.AreaID, lockedSession.Stage)
 
-	// 5. Lưu trạng thái Session
-	session.RewardClaimed = true
-	session.RewardClaimedAt = s.now().UTC()
-	session.RewardIdempotencyKey = idempotencyKey
-	session.ClaimedRewards = claimed
-
-	if err := s.repo.UpdateSession(ctx, session); err != nil {
-		return nil, err
+	if err := s.repo.CompleteRewardClaim(ctx, sessionID, claimID, plan.Summary, time.Now().UTC()); err != nil {
+		s.log.Error("CRITICAL: reward granted but claim finalize failed", zap.String("sessionId", sessionID), zap.Error(err))
+		return nil, fmt.Errorf("reward granted but claim finalize failed: %w", err)
 	}
 
 	s.log.Info("Nhận thưởng PvE thành công",
 		zap.String("userId", userID),
 		zap.String("sessionId", sessionID),
 		zap.Int("stage", session.Stage),
-		zap.Int("totalRewards", len(claimed)),
-		zap.String("idempotencyKey", idempotencyKey),
+		zap.Int("totalRewards", len(plan.Summary)),
 	)
-	return claimed, nil
+	return plan.Summary, nil
 }

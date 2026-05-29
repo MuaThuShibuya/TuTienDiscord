@@ -7,8 +7,11 @@ import (
 	"context"
 	"errors"
 	"math/rand"
+	"sync"
+	"sync/atomic"
 	"testing"
 
+	"github.com/whiskey/tu-tien-bot/internal/apperrors"
 	"github.com/whiskey/tu-tien-bot/internal/game/combat"
 	"github.com/whiskey/tu-tien-bot/internal/game/pve"
 	"go.uber.org/zap"
@@ -27,6 +30,12 @@ func newFakeGrant() *fakeGrantService {
 	return &fakeGrantService{items: make(map[string]int64)}
 }
 
+func (f *fakeGrantService) PreflightInventoryCapacity(ctx context.Context, userID string, items []RewardItemPlan) error {
+	if f.failNext {
+		return apperrors.ErrInventoryFull
+	}
+	return nil
+}
 func (f *fakeGrantService) GrantExp(ctx context.Context, userID string, amount int64) error {
 	if f.failNext {
 		return errors.New("mock db error")
@@ -105,7 +114,7 @@ func TestPvECombat_EndToEnd_WinClaimRewardProgress(t *testing.T) {
 	svc.repo.UpdateSession(ctx, session)
 
 	// 3. Claim Reward
-	rewards, err := svc.ClaimReward(ctx, "u1", session.ID, "idempotency_1")
+	rewards, err := svc.ClaimReward(ctx, "u1", session.ID)
 	if err != nil {
 		t.Fatalf("ClaimReward failed: %v", err)
 	}
@@ -125,34 +134,32 @@ func TestPvECombat_EndToEnd_WinClaimRewardProgress(t *testing.T) {
 	}
 }
 
-func TestPvECombat_ClaimRewardTwice_NoDoubleGrant(t *testing.T) {
-	svc, grantSvc, _, _ := setupIntegrationEnv()
+func TestPvECombat_ConcurrentDoubleClaim_NoDoubleGrant(t *testing.T) {
+	svc, _, _, _ := setupIntegrationEnv()
 	ctx := context.Background()
 
 	session, _ := svc.StartPvECombat(ctx, "u1", "area_du_ngoan_rung_truc")
 	session.State = combat.StateWon
 	svc.repo.UpdateSession(ctx, session)
 
-	// Claim lần 1
-	_, _ = svc.ClaimReward(ctx, "u1", session.ID, "idem_abc")
-	expFirstClaim := grantSvc.totalExp
+	var wg sync.WaitGroup
+	var successCount int32
 
-	// Claim lần 2 cùng key (Double click)
-	rewards2, err := svc.ClaimReward(ctx, "u1", session.ID, "idem_abc")
-	if err != nil {
-		t.Fatalf("Idempotency sai, đáng lẽ phải trả kết quả cũ, nhưng lại lỗi: %v", err)
+	// Bắn 100 goroutine đồng thời
+	for i := 0; i < 100; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, err := svc.ClaimReward(ctx, "u1", session.ID)
+			if err == nil {
+				atomic.AddInt32(&successCount, 1)
+			}
+		}()
 	}
-	if len(rewards2) == 0 {
-		t.Errorf("Phải trả về đúng mảng reward cũ")
-	}
-	if grantSvc.totalExp > expFirstClaim {
-		t.Errorf("NGUY HIỂM: Tài nguyên bị cấp 2 lần (Double Grant)!")
-	}
+	wg.Wait()
 
-	// Claim lần 3 KHÁC key (Hacker cố thử)
-	_, err = svc.ClaimReward(ctx, "u1", session.ID, "idem_hacker_key")
-	if err != combat.ErrRewardAlreadyClaimed {
-		t.Errorf("Mong đợi lỗi ErrRewardAlreadyClaimed, nhưng nhận %v", err)
+	if successCount != 1 {
+		t.Errorf("Lỗ hổng Race Condition: Có %d request ăn được giải, mong đợi đúng 1", successCount)
 	}
 }
 
@@ -163,7 +170,7 @@ func TestPvECombat_CannotClaimBeforeWin(t *testing.T) {
 	session, _ := svc.StartPvECombat(ctx, "u1", "area_du_ngoan_rung_truc")
 
 	// Session đang active, chưa đánh thắng
-	_, err := svc.ClaimReward(ctx, "u1", session.ID, "idem_abc")
+	_, err := svc.ClaimReward(ctx, "u1", session.ID)
 	if err != combat.ErrRewardSessionNotWon {
 		t.Errorf("Mong đợi lỗi ErrRewardSessionNotWon, nhận %v", err)
 	}
@@ -173,20 +180,23 @@ func TestPvECombat_CannotClaimBeforeWin(t *testing.T) {
 }
 
 func TestPvECombat_CannotClaimLostSession(t *testing.T) {
-	svc, _, _, _ := setupIntegrationEnv()
+	svc, grantSvc, _, _ := setupIntegrationEnv()
 	ctx := context.Background()
 
 	session, _ := svc.StartPvECombat(ctx, "u1", "area_du_ngoan_rung_truc")
 	session.State = combat.StateLost
 	svc.repo.UpdateSession(ctx, session)
 
-	_, err := svc.ClaimReward(ctx, "u1", session.ID, "idem_abc")
+	_, err := svc.ClaimReward(ctx, "u1", session.ID)
 	if err != combat.ErrRewardSessionNotWon {
 		t.Errorf("Thua trận không được nhận thưởng")
 	}
+	if grantSvc.totalExp > 0 {
+		t.Errorf("Thua trận không được phép nhận thưởng exp")
+	}
 }
 
-func TestPvECombat_RewardGrantFailure_DoesNotMarkClaimed(t *testing.T) {
+func TestPvECombat_RewardGrantFailure_LocksSession(t *testing.T) {
 	svc, grantSvc, repo, pveProv := setupIntegrationEnv()
 	ctx := context.Background()
 
@@ -194,10 +204,10 @@ func TestPvECombat_RewardGrantFailure_DoesNotMarkClaimed(t *testing.T) {
 	session.State = combat.StateWon
 	svc.repo.UpdateSession(ctx, session)
 
-	// Giả lập túi đồ đầy / Lỗi DB
+	// Giả lập Lỗi DB trong lúc grant (sau khi lock)
 	grantSvc.failNext = true
 
-	_, err := svc.ClaimReward(ctx, "u1", session.ID, "idem_fail")
+	_, err := svc.ClaimReward(ctx, "u1", session.ID)
 	if err == nil {
 		t.Fatalf("Đáng lẽ phải lỗi grant")
 	}
@@ -207,15 +217,18 @@ func TestPvECombat_RewardGrantFailure_DoesNotMarkClaimed(t *testing.T) {
 	if updatedSession.RewardClaimed {
 		t.Errorf("Lỗi lớn: Grant lỗi nhưng Session vẫn bị đánh dấu là đã nhận (Mất đồ của user)")
 	}
+	if updatedSession.RewardClaimStatus != "claim_failed" {
+		t.Errorf("Mong đợi trạng thái claim_failed, nhận %s", updatedSession.RewardClaimStatus)
+	}
 	if pveProv.clearedStage > 0 {
 		t.Errorf("Grant lỗi thì không được lưu Progress")
 	}
 
-	// Thử lại lần 2 (Sau khi user dọn túi)
+	// Thử lại lần 2 phải bị khóa (Hard Fail)
 	grantSvc.failNext = false
-	_, err = svc.ClaimReward(ctx, "u1", session.ID, "idem_fail")
-	if err != nil {
-		t.Fatalf("Lần 2 phải thành công, nhận %v", err)
+	_, err = svc.ClaimReward(ctx, "u1", session.ID)
+	if err != combat.ErrRewardClaimFailedNeedsAdmin {
+		t.Fatalf("Lần 2 phải báo lỗi khóa an toàn (cần admin), nhận %v", err)
 	}
 }
 
@@ -231,7 +244,7 @@ func TestPvECombat_ProgressOnlyIncreases(t *testing.T) {
 	session.State = combat.StateWon
 	svc.repo.UpdateSession(ctx, session)
 
-	_, _ = svc.ClaimReward(ctx, "u1", session.ID, "idem_abc")
+	_, _ = svc.ClaimReward(ctx, "u1", session.ID)
 
 	if pveProv.clearedStage != 5 {
 		t.Errorf("Farm lại ải cũ làm tụt tiến trình! Mong đợi 5, nhận %d", pveProv.clearedStage)
