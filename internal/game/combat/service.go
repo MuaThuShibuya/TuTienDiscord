@@ -69,16 +69,17 @@ func (s *Service) PlayerBasicAttack(ctx context.Context, userID, sessionID, targ
 	if session.UserID != userID {
 		return nil, ErrCombatSessionForbidden
 	}
+
+	// Chống Double Click ưu tiên xử lý trước để có thể mượt mà trả về StateWon/Lost nếu click đúp lúc quái vừa chết
+	if session.HasIdempotencyKey(idempotencyKey) {
+		return session, nil
+	}
+
 	if !session.IsActive() {
 		return nil, ErrCombatSessionNotActive
 	}
 	if session.IsExpired(s.now().UTC()) {
 		return nil, ErrCombatSessionExpired
-	}
-
-	// Chống Double Click
-	if session.HasIdempotencyKey(idempotencyKey) {
-		return session, nil
 	}
 
 	if !session.IsPlayerTurn() {

@@ -144,13 +144,13 @@ func (r *Router) HandlePvEInteraction(s *discordgo.Session, i *discordgo.Interac
 			return
 		}
 
-		opts := pvecombat.AutoBattleOptions{
+		opts := combat.AutoBattleOptions{
 			MaxActions:     5,
 			IdempotencyKey: i.ID,
 			PreferSkill:    false,
 		}
 
-		res, err := r.pvecombatSvc.AutoBattle(ctx, userID, payload.CombatSessionID, opts)
+		res, err := r.combatSvc.ExecuteAutoBattle(ctx, userID, payload.CombatSessionID, opts)
 		if err != nil {
 			ui.EditEphemeralEmbed(s, i, ui.WarningEmbed(formatCombatError(err)))
 			return

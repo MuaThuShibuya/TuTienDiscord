@@ -77,3 +77,29 @@ func TestTurnOrderService_NextActor(t *testing.T) {
 		t.Errorf("NextActor không được trả về rỗng")
 	}
 }
+
+func TestTurnOrderService_RemoveActor(t *testing.T) {
+	svc := NewTurnOrderService()
+	actors := []CombatActor{
+		{ID: "p1", Stats: CombatStats{Speed: 100}},
+		{ID: "e1", Stats: CombatStats{Speed: 90}},
+		{ID: "e2", Stats: CombatStats{Speed: 80}},
+	}
+
+	order := svc.BuildInitialOrder(actors)
+	if len(order) != 3 {
+		t.Fatalf("Đáng lẽ phải có 3 actor")
+	}
+
+	// E1 bị hạ gục -> Loại khỏi Turn Order
+	order = svc.RemoveActor(order, "e1")
+
+	if len(order) != 2 {
+		t.Fatalf("Đáng lẽ chỉ còn 2 actor sau khi xoá")
+	}
+	for _, o := range order {
+		if o.ActorID == "e1" {
+			t.Errorf("Lỗi: E1 vẫn còn tồn tại trong thanh hành động")
+		}
+	}
+}

@@ -33,6 +33,48 @@ func TestBuildHPBar_ClampAndFormat(t *testing.T) {
 	}
 }
 
+func TestFormatNumber(t *testing.T) {
+	tests := []struct {
+		in  int64
+		out string
+	}{
+		{0, "0"},
+		{999, "999"},
+		{1000, "1,000"},
+		{1234567, "1,234,567"},
+		{-1000, "-1,000"}, // Format cả số âm nếu bị debuff
+	}
+	for _, tc := range tests {
+		if got := FormatNumber(tc.in); got != tc.out {
+			t.Errorf("FormatNumber(%d) = %s; mong đợi %s", tc.in, got, tc.out)
+		}
+	}
+}
+
+func TestCombatSessionToViewModel_TrimLogs_UX(t *testing.T) {
+	cSession := &combat.CombatSession{
+		ID:    "ss_logs",
+		State: combat.StateActive,
+		Logs: []combat.CombatLogEntry{
+			{Turn: 1, Message: "Log 1"},
+			{Turn: 2, Message: "Log 2"},
+			{Turn: 3, Message: "Log 3"},
+			{Turn: 4, Message: "Log 4"},
+			{Turn: 5, Message: "Log 5"},
+			{Turn: 6, Message: "Log 6"}, // Phải cắt bỏ Log 1, chỉ show Log 2->6 lên UI
+		},
+	}
+
+	vm := CombatSessionToViewModel(cSession, "Bí Cảnh")
+
+	if len(vm.Logs) != 5 {
+		t.Errorf("UI Adapter chỉ nên lấy 5 logs gần nhất để tránh tràn Embed, nhận: %d", len(vm.Logs))
+	}
+	if !strings.Contains(vm.Logs[0], "Log 2") {
+		t.Errorf("Log đầu tiên render ra phải là Log 2")
+	}
+}
+
 func TestCombatSessionToViewModel_Active(t *testing.T) {
 	cSession := &combat.CombatSession{
 		ID:    "ss_123",
