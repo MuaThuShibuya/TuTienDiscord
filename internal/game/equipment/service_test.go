@@ -107,6 +107,9 @@ func (m *mockInvSvc) UseItem(ctx context.Context, userID, guildID, instanceID st
 func (m *mockInvSvc) DismantleItem(ctx context.Context, userID, guildID, instanceID string) (string, error) {
 	return "", nil
 }
+func (m *mockInvSvc) RemoveItem(ctx context.Context, userID, guildID, definitionID string, quantity int64) error {
+	return nil
+}
 
 // --- Tests ---
 

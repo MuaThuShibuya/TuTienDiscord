@@ -26,6 +26,7 @@ const (
 	DomainAlchemy     = "alchemy"     // Lò luyện đan
 	DomainPvE         = "pve"         // PvE Combat (Du Ngoạn / Bí Cảnh)
 	DomainAdmin       = "admin"       // Thiên Cơ Các (Owner Admin)
+	DomainShop        = "shop"        // Cửa hàng NPC & Đấu Giá Người Chơi
 	// TODO v0.3+: thêm domain khi xây dựng tính năng mới
 )
 
@@ -76,6 +77,24 @@ const (
 	ActionPvEAuto    = "auto"    // Tự động đánh
 	ActionPvEClaim   = "claim"   // Nhận thưởng thắng trận
 	ActionPvEEscape  = "escape"  // Bỏ chạy
+
+	// Shop & Auction
+	ActionShopMain                   = "main"         // Menu chính phường thị
+	ActionShopGoNPC                  = "go_npc"       // Sang shop NPC
+	ActionShopGoPlayer               = "go_player"    // Sang sàn đấu giá
+	ActionShopNPCBuy                 = "npc_buy"      // Mua từ NPC
+	ActionShopNPCSell                = "npc_sell"     // Bán cho NPC
+	ActionShopNPCRefresh             = "npc_ref"      // Làm mới NPC Shop
+	ActionShopNPCCategory            = "npc_cat"      // Chọn danh mục NPC
+	ActionShopNPCPage                = "npc_page"     // Phân trang danh sách mua/bán NPC
+	ActionShopNPCModeBuy             = "npc_mbuy"     // Chuyển sang mode Mua
+	ActionShopNPCModeSell            = "npc_msell"    // Chuyển sang mode Bán
+	ActionShopPlayerBuy              = "p_buy"        // Mua từ Đấu giá
+	ActionShopPlayerList             = "p_list"       // Mở chọn đồ đăng bán (Không mở form)
+	ActionShopPlayerListSelect_modal = "p_sel_modal"  // BẮT BUỘC kết thúc bằng _modal để mở Form
+	ActionShopPlayerListApply        = "p_list_apply" // Xác nhận đăng bán
+	ActionShopPlayerManage           = "p_manage"     // Quản lý hàng đang bán
+	ActionShopPlayerCancel           = "p_cancel"     // Hủy đăng bán
 
 	// Admin
 	ActionAdminMain              = "main"

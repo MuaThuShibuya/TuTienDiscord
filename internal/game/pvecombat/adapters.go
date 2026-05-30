@@ -12,6 +12,8 @@ import (
 	"github.com/whiskey/tu-tien-bot/internal/apperrors"
 	"github.com/whiskey/tu-tien-bot/internal/game/characterstats"
 	"github.com/whiskey/tu-tien-bot/internal/game/combat"
+	"github.com/whiskey/tu-tien-bot/internal/game/cultivation"
+	"github.com/whiskey/tu-tien-bot/internal/game/economy"
 	"github.com/whiskey/tu-tien-bot/internal/game/inventory"
 	"github.com/whiskey/tu-tien-bot/internal/game/item"
 	"github.com/whiskey/tu-tien-bot/internal/game/pve"
@@ -62,23 +64,34 @@ func (a *PvEAdapter) MarkStageCleared(ctx context.Context, userID, areaID string
 }
 
 // GrantAdapter kết nối Inventory & Economy để trao thưởng.
-type GrantAdapter struct{ invSvc inventory.Service }
-
-func NewGrantAdapter(invSvc inventory.Service) RewardGrantService {
-	return &GrantAdapter{invSvc: invSvc}
+type GrantAdapter struct {
+	invSvc  inventory.Service
+	ecoSvc  economy.Service
+	cultSvc cultivation.Service
 }
+
+func NewGrantAdapter(invSvc inventory.Service, ecoSvc economy.Service, cultSvc cultivation.Service) RewardGrantService {
+	return &GrantAdapter{invSvc: invSvc, ecoSvc: ecoSvc, cultSvc: cultSvc}
+}
+
 func (a *GrantAdapter) GrantExp(ctx context.Context, userID string, amount int64) error {
 	if amount <= 0 {
 		return errors.New("invalid reward amount")
 	}
-	return nil
-} // TODO: Nối với Cultivation sau
+	// Đã kết nối với Cultivation Service
+	return a.cultSvc.AddExperience(ctx, userID, "", amount) // guildID rỗng cho tài nguyên global
+}
+
 func (a *GrantAdapter) GrantStones(ctx context.Context, userID string, amount int64) error {
 	if amount <= 0 {
 		return errors.New("invalid reward amount")
 	}
-	return nil
-} // TODO: Nối với Economy sau
+	// Đã kết nối với Economy Service, ghi rõ lý do để audit
+	// Giả định guildID rỗng cho ví global
+	_, err := a.ecoSvc.EarnSpiritStones(ctx, userID, "", amount, "pve_reward")
+	return err
+}
+
 func (a *GrantAdapter) GrantItem(ctx context.Context, userID, defID string, quantity int64) error {
 	if quantity <= 0 {
 		return errors.New("invalid reward amount")

@@ -43,6 +43,7 @@ type Router struct {
 	alchemySvc     alchemy.Service
 	pveHandler     func(s *discordgo.Session, i *discordgo.Interaction, session *Session, action, extra string)
 	adminHandler   func(s *discordgo.Session, i *discordgo.Interaction, session *Session, action, extra string)
+	shopHandler    func(s *discordgo.Session, i *discordgo.Interaction, session *Session, action, extra string)
 	pageLoaders    map[Page]PageLoader
 	log            *zap.Logger
 }
@@ -57,6 +58,7 @@ func NewRouter(
 	alchemySvc alchemy.Service,
 	pveHandler func(s *discordgo.Session, i *discordgo.Interaction, session *Session, action, extra string),
 	adminHandler func(s *discordgo.Session, i *discordgo.Interaction, session *Session, action, extra string),
+	shopHandler func(s *discordgo.Session, i *discordgo.Interaction, session *Session, action, extra string),
 	loaders map[Page]PageLoader,
 ) *Router {
 	return &Router{
@@ -68,6 +70,7 @@ func NewRouter(
 		alchemySvc:     alchemySvc,
 		pveHandler:     pveHandler,
 		adminHandler:   adminHandler,
+		shopHandler:    shopHandler,
 		pageLoaders:    loaders,
 		log:            logger.L().Named("menu.router"),
 	}
@@ -165,6 +168,10 @@ func (r *Router) Handle(s *discordgo.Session, i *discordgo.Interaction) {
 	case DomainAdmin:
 		if r.adminHandler != nil {
 			r.adminHandler(s, i, session, parsed.Action, parsed.Extra)
+		}
+	case DomainShop:
+		if r.shopHandler != nil {
+			r.shopHandler(s, i, session, parsed.Action, parsed.Extra)
 		}
 	default:
 		r.log.Warn("domain không xác định",

@@ -11,50 +11,65 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/whiskey/tu-tien-bot/internal/apperrors"
 	"github.com/whiskey/tu-tien-bot/internal/game/combat"
+	"github.com/whiskey/tu-tien-bot/internal/game/cultivation"
+	"github.com/whiskey/tu-tien-bot/internal/game/economy"
 	"github.com/whiskey/tu-tien-bot/internal/game/pve"
 	"go.uber.org/zap"
 )
 
 // --- Fake Services Dành Cho Integration ---
 
-type fakeGrantService struct {
-	failNext   bool
-	totalExp   int64
-	totalStone int64
-	items      map[string]int64
+// fakeEconomyService giả lập service kinh tế để test.
+type fakeEconomyService struct {
+	economy.Service // Bọc Interface để thỏa mãn tự động các method không dùng tới
+	wallets         map[string]*economy.Wallet
+	failNext        bool
+	mu              sync.Mutex
 }
 
-func newFakeGrant() *fakeGrantService {
-	return &fakeGrantService{items: make(map[string]int64)}
-}
-
-func (f *fakeGrantService) PreflightInventoryCapacity(ctx context.Context, userID string, items []RewardItemPlan) error {
+func (f *fakeEconomyService) EarnSpiritStones(ctx context.Context, userID, guildID string, amount int64, reason string) (*economy.Wallet, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	if f.failNext {
-		return apperrors.ErrInventoryFull
+		return nil, errors.New("mock db error")
 	}
-	return nil
+	if f.wallets == nil {
+		f.wallets = make(map[string]*economy.Wallet)
+	}
+	if _, ok := f.wallets[userID]; !ok {
+		f.wallets[userID] = &economy.Wallet{UserID: userID}
+	}
+	f.wallets[userID].SpiritStones += amount
+	return f.wallets[userID], nil
 }
-func (f *fakeGrantService) GrantExp(ctx context.Context, userID string, amount int64) error {
+
+// Các phương thức khác để thỏa mãn interface (không cần thiết cho test này)
+func (f *fakeEconomyService) GetWallet(ctx context.Context, userID, guildID string) (*economy.Wallet, error) {
+	return f.wallets[userID], nil
+}
+func (f *fakeEconomyService) GetOrCreate(ctx context.Context, userID, guildID string) (*economy.Wallet, error) {
+	return f.EarnSpiritStones(ctx, userID, guildID, 0, "create")
+}
+func (f *fakeEconomyService) SpendSpiritStones(ctx context.Context, userID, guildID string, amount int64, reason string) (*economy.Wallet, error) {
+	return nil, nil
+}
+
+// fakeCultivationService giả lập service tu luyện.
+type fakeCultivationService struct {
+	cultivation.Service // Bọc Interface để thỏa mãn tự động các method không dùng tới
+	exp                 map[string]int64
+	failNext            bool
+}
+
+func (f *fakeCultivationService) AddExperience(ctx context.Context, userID, guildID string, amount int64) error {
 	if f.failNext {
 		return errors.New("mock db error")
 	}
-	f.totalExp += amount
-	return nil
-}
-func (f *fakeGrantService) GrantStones(ctx context.Context, userID string, amount int64) error {
-	if f.failNext {
-		return errors.New("mock db error")
+	if f.exp == nil {
+		f.exp = make(map[string]int64)
 	}
-	f.totalStone += amount
-	return nil
-}
-func (f *fakeGrantService) GrantItem(ctx context.Context, userID, defID string, quantity int64) error {
-	if f.failNext {
-		return errors.New("mock inventory full")
-	}
-	f.items[defID] += quantity
+	f.exp[userID] += amount
 	return nil
 }
 
@@ -87,21 +102,30 @@ func (p *integrationPvEProvider) MarkStageCleared(ctx context.Context, userID, a
 
 // --- Setup Môi trường ---
 
-func setupIntegrationEnv() (*Service, *fakeGrantService, *fakeRepo, *integrationPvEProvider) {
+func setupIntegrationEnv() (*Service, *fakeEconomyService, *fakeCultivationService, *fakeRepo, *integrationPvEProvider) {
 	repo := newFakeRepo()
-	grantSvc := newFakeGrant()
+
+	// Khởi tạo các service giả lập
+	ecoSvc := &fakeEconomyService{}
+	cultSvc := &fakeCultivationService{}
+
+	// Khởi tạo GrantAdapter với các service giả lập
+	// inventory.Service có thể là nil vì không test grant item trong test này.
+	grantSvc := NewGrantAdapter(nil, ecoSvc, cultSvc)
+
 	pveProv := &integrationPvEProvider{}
 	statsProv := &fakeStatsProvider{stats: combat.CombatStats{MaxHP: 1000, ATK: 50, Speed: 100}}
 
 	svc, _ := NewService(repo, statsProv, pveProv, grantSvc, combat.NewTurnOrderService(), rand.New(rand.NewSource(1)), zap.NewNop())
-	return svc, grantSvc, repo, pveProv
+	return svc, ecoSvc, cultSvc, repo, pveProv
 }
 
 // --- T E S T S ---
 
 func TestPvECombat_EndToEnd_WinClaimRewardProgress(t *testing.T) {
-	svc, grantSvc, _, pveProv := setupIntegrationEnv()
+	svc, ecoSvc, cultSvc, _, pveProv := setupIntegrationEnv()
 	ctx := context.Background()
+	_ = cultSvc // use cultSvc
 
 	// 1. Start Combat
 	session, err := svc.StartPvECombat(ctx, "u1", "area_du_ngoan_rung_truc")
@@ -126,8 +150,12 @@ func TestPvECombat_EndToEnd_WinClaimRewardProgress(t *testing.T) {
 	if !session.RewardClaimed {
 		t.Errorf("Trạng thái Session phải được đánh dấu là đã claim")
 	}
-	if grantSvc.totalExp == 0 && grantSvc.totalStone == 0 {
-		t.Errorf("Grant service không nhận được tài nguyên")
+	wallet, _ := ecoSvc.GetWallet(ctx, "u1", "")
+	if wallet == nil || wallet.SpiritStones == 0 {
+		t.Errorf("Economy service không ghi nhận linh thạch")
+	}
+	if cultSvc.exp["u1"] == 0 {
+		t.Errorf("Cultivation service không ghi nhận tu vi (exp)")
 	}
 	if pveProv.clearedStage != 1 {
 		t.Errorf("Tiến trình (Progress) chưa được cập nhật. Mong đợi 1, nhận %d", pveProv.clearedStage)
@@ -135,7 +163,7 @@ func TestPvECombat_EndToEnd_WinClaimRewardProgress(t *testing.T) {
 }
 
 func TestPvECombat_ConcurrentDoubleClaim_NoDoubleGrant(t *testing.T) {
-	svc, _, _, _ := setupIntegrationEnv()
+	svc, _, _, _, _ := setupIntegrationEnv()
 	ctx := context.Background()
 
 	session, _ := svc.StartPvECombat(ctx, "u1", "area_du_ngoan_rung_truc")
@@ -164,7 +192,7 @@ func TestPvECombat_ConcurrentDoubleClaim_NoDoubleGrant(t *testing.T) {
 }
 
 func TestPvECombat_CannotClaimBeforeWin(t *testing.T) {
-	svc, grantSvc, _, _ := setupIntegrationEnv()
+	svc, ecoSvc, _, _, _ := setupIntegrationEnv()
 	ctx := context.Background()
 
 	session, _ := svc.StartPvECombat(ctx, "u1", "area_du_ngoan_rung_truc")
@@ -174,13 +202,13 @@ func TestPvECombat_CannotClaimBeforeWin(t *testing.T) {
 	if err != combat.ErrRewardSessionNotWon {
 		t.Errorf("Mong đợi lỗi ErrRewardSessionNotWon, nhận %v", err)
 	}
-	if grantSvc.totalExp > 0 {
+	if ecoSvc.wallets["u1"] != nil && ecoSvc.wallets["u1"].SpiritStones > 0 {
 		t.Errorf("Quái chưa chết mà đã rớt đồ!")
 	}
 }
 
 func TestPvECombat_CannotClaimLostSession(t *testing.T) {
-	svc, grantSvc, _, _ := setupIntegrationEnv()
+	svc, ecoSvc, _, _, _ := setupIntegrationEnv()
 	ctx := context.Background()
 
 	session, _ := svc.StartPvECombat(ctx, "u1", "area_du_ngoan_rung_truc")
@@ -191,13 +219,13 @@ func TestPvECombat_CannotClaimLostSession(t *testing.T) {
 	if err != combat.ErrRewardSessionNotWon {
 		t.Errorf("Thua trận không được nhận thưởng")
 	}
-	if grantSvc.totalExp > 0 {
+	if ecoSvc.wallets["u1"] != nil && ecoSvc.wallets["u1"].SpiritStones > 0 {
 		t.Errorf("Thua trận không được phép nhận thưởng exp")
 	}
 }
 
 func TestPvECombat_RewardGrantFailure_LocksSession(t *testing.T) {
-	svc, grantSvc, repo, pveProv := setupIntegrationEnv()
+	svc, ecoSvc, _, repo, pveProv := setupIntegrationEnv()
 	ctx := context.Background()
 
 	session, _ := svc.StartPvECombat(ctx, "u1", "area_du_ngoan_rung_truc")
@@ -205,7 +233,7 @@ func TestPvECombat_RewardGrantFailure_LocksSession(t *testing.T) {
 	svc.repo.UpdateSession(ctx, session)
 
 	// Giả lập Lỗi DB trong lúc grant (sau khi lock)
-	grantSvc.failNext = true
+	ecoSvc.failNext = true
 
 	_, err := svc.ClaimReward(ctx, "u1", session.ID)
 	if err == nil {
@@ -225,7 +253,7 @@ func TestPvECombat_RewardGrantFailure_LocksSession(t *testing.T) {
 	}
 
 	// Thử lại lần 2 phải bị khóa (Hard Fail)
-	grantSvc.failNext = false
+	ecoSvc.failNext = false
 	_, err = svc.ClaimReward(ctx, "u1", session.ID)
 	if err != combat.ErrRewardClaimFailedNeedsAdmin {
 		t.Fatalf("Lần 2 phải báo lỗi khóa an toàn (cần admin), nhận %v", err)
@@ -233,7 +261,7 @@ func TestPvECombat_RewardGrantFailure_LocksSession(t *testing.T) {
 }
 
 func TestPvECombat_ProgressOnlyIncreases(t *testing.T) {
-	svc, _, _, pveProv := setupIntegrationEnv()
+	svc, _, _, _, pveProv := setupIntegrationEnv()
 	ctx := context.Background()
 
 	pveProv.clearedStage = 5 // User đã đánh tới ải 5

@@ -145,8 +145,10 @@ func (r *Router) HandlePvEInteraction(s *discordgo.Session, i *discordgo.Interac
 		}
 
 		opts := combat.AutoBattleOptions{
-			MaxActions:     100, // Đánh liên tục cho đến khi kết thúc trận (hoặc chạm mốc an toàn 100 hiệp)
-			IdempotencyKey: i.ID,
+			MaxActions: 100, // Đánh liên tục cho đến khi kết thúc trận (hoặc chạm mốc an toàn 100 hiệp)
+			// FIX: Không dùng interaction ID. Dùng SessionID kết hợp suffix để đảm bảo
+			// dù user spam nút Auto, backend chỉ nhận 1 luồng xử lý duy nhất cho trận này.
+			IdempotencyKey: fmt.Sprintf("auto_%s", payload.CombatSessionID),
 			PreferSkill:    false,
 		}
 

@@ -242,21 +242,20 @@ func (r *Router) HandleAdminInteraction(s *discordgo.Session, i *discordgo.Inter
 		r.sendSuccess(s, i, "Càn Khôn Tái Lập Hoàn Tất", result.Summary())
 
 	case menu.ActionAdminConfirmResetModal:
-		parts := strings.Split(extra, "|")
-		if len(parts) < 2 {
-			r.sendError(s, i, fmt.Errorf("Dữ liệu pháp ấn bị hỏng."))
-			return
-		}
-		actionConfirm, phrase := parts[0], parts[1]
-		extraData := ""
-		if len(parts) >= 3 {
-			extraData = parts[2]
+		target := strings.TrimSpace(extra)
+		var actionConfirm, phrase string
+		if target == "all" {
+			actionConfirm = menu.ActionAdminResetAllApply
+			phrase = "XACNHAN"
+		} else {
+			actionConfirm = menu.ActionAdminResetUserApply
+			phrase = fmt.Sprintf("XACNHAN %s", target)
 		}
 
 		_ = s.InteractionRespond(i, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseModal,
 			Data: &discordgo.InteractionResponseData{
-				CustomID: menu.Build(menu.DomainAdmin, actionConfirm, menuSession.SessionID, extraData),
+				CustomID: menu.Build(menu.DomainAdmin, actionConfirm, menuSession.SessionID, target),
 				Title:    "Xác Nhận Pháp Ấn Tối Cao",
 				Components: []discordgo.MessageComponent{
 					ui.ActionRow(discordgo.TextInput{
@@ -320,18 +319,15 @@ func (r *Router) renderMainPanel(s *discordgo.Session, i *discordgo.Interaction,
 }
 
 func (r *Router) renderResetPreview(s *discordgo.Session, i *discordgo.Interaction, session *menu.Session, preview *gameadmin.ResetPreview) {
-	var title, confirmAction, confirmLabel, confirmPhrase, extra string
+	var title, confirmLabel, extra string
 	if preview.Scope == gameadmin.ResetScopeUser {
 		title = fmt.Sprintf("Thiên Phạt - Huyễn Ảnh Reset Đạo Hữu %s", preview.TargetUserID)
-		confirmAction = menu.ActionAdminResetUserApply
 		confirmLabel = "Xác Nhận Thiên Phạt"
-		confirmPhrase = fmt.Sprintf("XACNHAN %s", preview.TargetUserID)
 		extra = preview.TargetUserID
 	} else {
 		title = "Càn Khôn Tái Lập - Huyễn Ảnh Reset Toàn Bộ"
-		confirmAction = menu.ActionAdminResetAllApply
 		confirmLabel = "Xác Nhận Tái Lập"
-		confirmPhrase = "XACNHAN"
+		extra = "all"
 	}
 
 	embed := &discordgo.MessageEmbed{
@@ -340,7 +336,7 @@ func (r *Router) renderResetPreview(s *discordgo.Session, i *discordgo.Interacti
 		Color:       0xED4245,
 	}
 
-	confirmButton := ui.Button(confirmLabel, menu.Build(menu.DomainAdmin, "confirm_reset_modal", session.SessionID, confirmAction+"|"+confirmPhrase+"|"+extra), ui.BtnDanger, emoji.Check, false)
+	confirmButton := ui.Button(confirmLabel, menu.Build(menu.DomainAdmin, menu.ActionAdminConfirmResetModal, session.SessionID, extra), ui.BtnDanger, emoji.Check, false)
 	cancelButton := ui.Button("Hủy", menu.Build(menu.DomainAdmin, menu.ActionAdminMain, session.SessionID), ui.BtnSecondary, emoji.Cross, false)
 
 	// Hiển thị preview cùng với nút mở Modal

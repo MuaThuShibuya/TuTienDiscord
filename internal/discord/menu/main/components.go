@@ -33,7 +33,7 @@ func buildComponents(vm *menu.MainMenuVM, isAdmin bool) []discordgo.MessageCompo
 			ui.SelectOption("Tông Môn", "sect", "Quản lý tông môn", emoji.Realm, false),
 			ui.SelectOption("PvP", "pvp", "Chiến đấu với người chơi khác", emoji.CombatPower, false),
 			ui.SelectOption("Nhiệm Vụ", "quest", "Nhiệm vụ hàng ngày", emoji.Skill, false),
-			ui.SelectOption("Cửa Hàng", "shop", "Mua bán vật phẩm", emoji.SpiritStone, false),
+			ui.SelectOption("Cửa Hàng", string(menu.PageMarket), "Mua bán vật phẩm", emoji.SpiritStone, false),
 		},
 	)
 

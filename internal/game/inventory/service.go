@@ -21,6 +21,7 @@ type Service interface {
 	ConsumeItems(ctx context.Context, userID, guildID string, itemsToConsume map[string]int64) error
 	UseItem(ctx context.Context, userID, guildID, instanceID string) (string, error)
 	DismantleItem(ctx context.Context, userID, guildID, instanceID string) (string, error)
+	RemoveItem(ctx context.Context, userID, guildID, definitionID string, quantity int64) error
 }
 
 type inventoryService struct {
@@ -295,4 +296,8 @@ func (s *inventoryService) DismantleItem(ctx context.Context, userID, guildID, i
 	}
 
 	return fmt.Sprintf("Phân giải **%s** thành công! Nhận được **%d** Hắc Thiết.", def.Name, qty), nil
+}
+
+func (s *inventoryService) RemoveItem(ctx context.Context, userID, guildID, definitionID string, quantity int64) error {
+	return s.ConsumeItems(ctx, userID, guildID, map[string]int64{definitionID: quantity})
 }

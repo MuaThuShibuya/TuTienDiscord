@@ -41,12 +41,15 @@ import (
 	"github.com/bwmarrin/discordgo"
 	adminmenu "github.com/whiskey/tu-tien-bot/internal/discord/menu/admin"
 	pvemenu "github.com/whiskey/tu-tien-bot/internal/discord/menu/pve"
+	shopmenu "github.com/whiskey/tu-tien-bot/internal/discord/menu/shop"
 	gameadminpkg "github.com/whiskey/tu-tien-bot/internal/game/admin"
 	aptitudepkg "github.com/whiskey/tu-tien-bot/internal/game/aptitude"
 	characterstatspkg "github.com/whiskey/tu-tien-bot/internal/game/characterstats"
 	combatpkg "github.com/whiskey/tu-tien-bot/internal/game/combat"
 	pvepkg "github.com/whiskey/tu-tien-bot/internal/game/pve"
 	pvecombatpkg "github.com/whiskey/tu-tien-bot/internal/game/pvecombat"
+	npcshoppkg "github.com/whiskey/tu-tien-bot/internal/game/shop/npc"
+	playershoppkg "github.com/whiskey/tu-tien-bot/internal/game/shop/player"
 )
 
 func main() {
@@ -129,6 +132,7 @@ func main() {
 	combatRepo := combatpkg.NewMongoRepository(db.DB())
 	pveProgRepo := pvepkg.NewMongoProgressRepository(db.DB())
 	aptitudeRepo := aptitudepkg.NewMongoRepository(db.DB())
+	playerShopRepo := playershoppkg.NewMongoRepository(db.DB())
 
 	// --- 5. Services (business logic) ---
 	profileSvc := profilepkg.NewService(profileRepo)
@@ -152,7 +156,7 @@ func main() {
 	pveProgSvc := pvepkg.NewProgressService(pveProgRepo)
 	statsProv := pvecombatpkg.NewStatsAdapter(charStatsSvc)
 	pveProv := pvecombatpkg.NewPvEAdapter(pveProgSvc)
-	grantSvc := pvecombatpkg.NewGrantAdapter(inventorySvc)
+	grantSvc := pvecombatpkg.NewGrantAdapter(inventorySvc, economySvc, cultivationSvc)
 
 	pveCombatSvc, err := pvecombatpkg.NewService(combatRepo, statsProv, pveProv, grantSvc, turnOrderSvc, nil, log)
 	if err != nil {
@@ -161,6 +165,10 @@ func main() {
 
 	// --- Admin Service ---
 	adminSvc := gameadminpkg.NewService(db.DB(), log)
+
+	// --- Shop Services ---
+	npcShopSvc := npcshoppkg.NewService(economySvc, inventorySvc, log)
+	playerShopSvc := playershoppkg.NewService(playerShopRepo, economySvc, inventorySvc, log)
 
 	// --- 6. Handlers (Controllers) ---
 	startHandler := handlers.NewStartHandler(profileSvc, cultivationSvc, economySvc, inventorySvc, aptitudeSvc)
@@ -179,8 +187,18 @@ func main() {
 		adminRouter.HandleAdminInteraction(s, i, session, action, extra)
 	}
 
+	// --- Shop Menu Router ---
+	shopRouter := shopmenu.NewRouter(npcShopSvc, playerShopSvc, economySvc, inventorySvc, sessionSvc, log)
+	shopActionHandler := func(s *discordgo.Session, i *discordgo.Interaction, session *discordmenu.Session, action string, extra string) {
+		shopRouter.HandleShopInteraction(s, i, session, action, extra)
+	}
+
+	loaders := menuHandler.PageLoaders()
+	loaders[discordmenu.PageMarket] = shopRouter.RenderMarketMain
+	loaders[discordmenu.Page("shop")] = shopRouter.RenderMarketMain // Dự phòng nếu UI menu chính gửi chữ "shop"
+
 	// --- 7. Menu router ---
-	menuRouter := discordmenu.NewRouter(cfg, sessionSvc, cultivationSvc, inventorySvc, equipSvc, alchemySvc, pveActionHandler, adminActionHandler, menuHandler.PageLoaders())
+	menuRouter := discordmenu.NewRouter(cfg, sessionSvc, cultivationSvc, inventorySvc, equipSvc, alchemySvc, pveActionHandler, adminActionHandler, shopActionHandler, loaders)
 
 	// --- 8. Discord top-level router ---
 	discordRouter := discord.NewRouter(startHandler, menuHandler, devHandler, menuRouter)
